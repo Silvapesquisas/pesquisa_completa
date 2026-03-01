@@ -49,7 +49,15 @@ export default function Dashboard() {
   const recentInterviews = interviews.slice(0, 5);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto">
+      {!bannerDismissed && (
+        <SyncErrorBanner
+          drafts={drafts}
+          onGoToDrafts={() => { window.location.href = createPageUrl("FieldApp"); }}
+          onDismiss={() => setBannerDismissed(true)}
+        />
+      )}
+    <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
