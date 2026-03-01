@@ -56,6 +56,7 @@ import InterviewEdit from './pages/InterviewEdit';
 import FieldApp from './pages/FieldApp';
 import Users from './pages/Users';
 import Reports from './pages/Reports';
+import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
@@ -73,4 +74,5 @@ export const PAGES = {
 export const pagesConfig = {
     mainPage: "Dashboard",
     Pages: PAGES,
+    Layout: __Layout,
 };
