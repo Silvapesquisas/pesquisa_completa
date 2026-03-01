@@ -354,10 +354,21 @@ export default function FieldApp() {
           </div>
           <div className="flex items-center justify-between mt-2">
             <span className="text-sm font-medium">Questão {currentIndex + 1} de {visibleQuestions.length}</span>
-            {currentQuestion.required && <Badge className="bg-blue-800 text-white text-xs">Obrigatória</Badge>}
+            <div className="flex items-center gap-2">
+              {autoSaveMsg && <span className="text-xs text-blue-200 animate-pulse">{autoSaveMsg}</span>}
+              {currentQuestion.required
+                ? <Badge className="bg-blue-800 text-white text-xs">Obrigatória</Badge>
+                : <Badge className="bg-blue-400/50 text-white text-xs">Opcional</Badge>}
+            </div>
           </div>
-          <div className="w-full bg-blue-500 rounded-full h-1.5 mt-3">
-            <div className="bg-white h-1.5 rounded-full transition-all" style={{ width: `${((currentIndex + 1) / visibleQuestions.length) * 100}%` }} />
+          <div className="mt-3">
+            <div className="flex justify-between text-xs text-blue-200 mb-1">
+              <span>{Math.round(((currentIndex + 1) / visibleQuestions.length) * 100)}% concluído</span>
+              <span>{visibleQuestions.length - currentIndex - 1} restantes</span>
+            </div>
+            <div className="w-full bg-blue-500 rounded-full h-2">
+              <div className="bg-white h-2 rounded-full transition-all" style={{ width: `${((currentIndex + 1) / visibleQuestions.length) * 100}%` }} />
+            </div>
           </div>
         </div>
         <div className="flex-1 p-5 space-y-5 pb-32">
