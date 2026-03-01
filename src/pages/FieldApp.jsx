@@ -160,6 +160,12 @@ export default function FieldApp() {
     else setStep("review");
   };
 
+  const skipQuestion = () => {
+    if (currentQuestion?.required) { alert("Esta questão é obrigatória e não pode ser pulada."); return; }
+    if (currentIndex < visibleQuestions.length - 1) setCurrentIndex(i => i + 1);
+    else setStep("review");
+  };
+
   const buildInterviewData = () => {
     const formattedAnswers = visibleQuestions.map(q => {
       const raw = answers[q.id] || "";
