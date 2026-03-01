@@ -363,7 +363,15 @@ export default function FieldApp() {
 
   // ── SELECT ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-5 space-y-5 pb-10">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 pb-10">
+      {!bannerDismissed && (
+        <SyncErrorBanner
+          drafts={drafts}
+          onGoToDrafts={() => { setBannerDismissed(false); document.getElementById("drafts-section")?.scrollIntoView({ behavior: "smooth" }); }}
+          onDismiss={() => setBannerDismissed(true)}
+        />
+      )}
+      <div className="p-5 space-y-5">
       <div className="pt-6">
         <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
         <p className="text-gray-500 text-sm mt-1">Olá, {user?.full_name || user?.email || "entrevistador"}</p>
