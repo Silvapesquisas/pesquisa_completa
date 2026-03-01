@@ -38,7 +38,7 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, on
     <Card className="border border-gray-200 shadow-sm">
       <CardHeader className="p-4 pb-2">
         <div className="flex items-center gap-2">
-          <GripVertical className="w-4 h-4 text-gray-300 shrink-0" />
+          <span {...dragHandleProps} className="cursor-grab active:cursor-grabbing"><GripVertical className="w-4 h-4 text-gray-300 shrink-0" /></span>
           <span className="text-xs font-medium text-gray-400 bg-gray-100 rounded px-2 py-0.5 shrink-0">Q{index + 1}</span>
           <span className="text-sm font-medium text-gray-700 flex-1 truncate">{question.text || "Nova questão"}</span>
           <div className="flex gap-1 shrink-0">
