@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2, Save } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List } from "lucide-react";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
+import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
 import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
+import QuestionIndex from "@/components/fieldapp/QuestionIndex";
 
 function QuestionField({ question, value, onChange }) {
   const type = question.type;
