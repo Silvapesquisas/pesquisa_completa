@@ -14,6 +14,9 @@ export default function Dashboard() {
   const [interviews, setInterviews] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  const { drafts, offlineSurveys, downloadSurvey, removeSurveyOffline, isOnline } = useOfflineSync();
 
   useEffect(() => {
     Promise.all([
@@ -27,6 +30,9 @@ export default function Dashboard() {
       setLoading(false);
     });
   }, []);
+
+  const offlineIds = new Set(offlineSurveys.map(s => s.id));
+  const activeSurveysList = surveys.filter(s => s.status === "ativa");
 
   const activeSurveys = surveys.filter(s => s.status === "ativa").length;
   const completedInterviews = interviews.filter(i => i.status === "concluida").length;
