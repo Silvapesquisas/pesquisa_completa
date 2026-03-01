@@ -81,11 +81,14 @@ export default function Layout({ children, currentPageName }) {
             App de Campo
           </Link>
           {user && (
-            <div className="px-3 py-2">
-              <p className="text-xs font-medium text-gray-700 truncate">{user.full_name || user.email}</p>
-              <button onClick={() => base44.auth.logout()} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1 mt-1">
-                <LogOut className="w-3 h-3" /> Sair
-              </button>
+            <div className="px-3 py-2 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-700 truncate">{user.full_name || user.email}</p>
+                <button onClick={() => base44.auth.logout()} className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1 mt-1">
+                  <LogOut className="w-3 h-3" /> Sair
+                </button>
+              </div>
+              <NotificationBell user={user} />
             </div>
           )}
         </div>
