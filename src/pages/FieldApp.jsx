@@ -230,7 +230,7 @@ export default function FieldApp() {
   const resetInterview = () => {
     setStep("select"); setSelectedSurvey(null); setAnswers({});
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
-    setNotes(""); setCurrentDraftId(null);
+    setNotes(""); setCurrentDraftId(null); setShowIndex(false);
   };
 
   // ── DONE ──
