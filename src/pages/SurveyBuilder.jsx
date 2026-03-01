@@ -170,6 +170,14 @@ export default function SurveyBuilder() {
     setSurvey(s => ({ ...s, questions: qs.map((q, i) => ({ ...q, order: i })) }));
   };
 
+  const onDragEnd = (result) => {
+    if (!result.destination) return;
+    const qs = [...survey.questions];
+    const [moved] = qs.splice(result.source.index, 1);
+    qs.splice(result.destination.index, 0, moved);
+    setSurvey(s => ({ ...s, questions: qs.map((q, i) => ({ ...q, order: i })) }));
+  };
+
   const save = async () => {
     if (!survey.title.trim()) { alert("Informe o título da pesquisa."); return; }
     setSaving(true);
