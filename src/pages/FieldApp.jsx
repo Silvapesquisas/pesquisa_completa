@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2, Square } from "lucide-react";
-import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2, Save } from "lucide-react";
+import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
+import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
 
 function QuestionField({ question, value, onChange }) {
   const type = question.type;
