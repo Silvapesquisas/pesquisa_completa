@@ -383,11 +383,13 @@ export default function FieldApp() {
         syncLogs={syncLogs} onClearLogs={clearLogs}
       />
 
-      <DraftsList
-        drafts={drafts}
-        onEdit={loadDraft}
-        onDelete={deleteDraft}
-      />
+      <div id="drafts-section">
+        <DraftsList
+          drafts={drafts}
+          onEdit={loadDraft}
+          onDelete={deleteDraft}
+        />
+      </div>
 
       <OfflineSurveys
         surveys={allSurveys}
@@ -398,6 +400,7 @@ export default function FieldApp() {
         isOnline={isOnline}
         onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}
       />
+      </div>
     </div>
   );
 }
