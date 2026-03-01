@@ -143,6 +143,11 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* AI Insights + Map + Performance */}
+      <AIInsightsWidget interviews={interviews} />
+      <InterviewMap interviews={interviews} />
+      <InterviewerPerformance interviews={interviews} />
+
       {/* Offline surveys management */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
