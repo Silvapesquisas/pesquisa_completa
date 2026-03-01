@@ -51,6 +51,7 @@ import Dashboard from './pages/Dashboard';
 import Surveys from './pages/Surveys';
 import SurveyBuilder from './pages/SurveyBuilder';
 import Interviews from './pages/Interviews';
+import InterviewDetail from './pages/InterviewDetail';
 
 
 export const PAGES = {
@@ -58,6 +59,7 @@ export const PAGES = {
     "Surveys": Surveys,
     "SurveyBuilder": SurveyBuilder,
     "Interviews": Interviews,
+    "InterviewDetail": InterviewDetail,
 }
 
 export const pagesConfig = {
