@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
 
 const QUESTION_TYPES = [
