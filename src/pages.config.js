@@ -49,11 +49,13 @@
  */
 import Dashboard from './pages/Dashboard';
 import Surveys from './pages/Surveys';
+import SurveyBuilder from './pages/SurveyBuilder';
 
 
 export const PAGES = {
     "Dashboard": Dashboard,
     "Surveys": Surveys,
+    "SurveyBuilder": SurveyBuilder,
 }
 
 export const pagesConfig = {
