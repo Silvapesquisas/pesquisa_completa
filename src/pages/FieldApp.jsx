@@ -155,8 +155,7 @@ export default function FieldApp() {
     else setStep("review");
   };
 
-  const submit = async () => {
-    setSaving(true);
+  const buildInterviewData = () => {
     const formattedAnswers = visibleQuestions.map(q => {
       const raw = answers[q.id] || "";
       const isMulti = q.type === "multipla_escolha";
@@ -168,8 +167,7 @@ export default function FieldApp() {
         answer_array: isMulti ? raw.split("|").filter(Boolean) : [],
       };
     });
-
-    await base44.entities.Interview.create({
+    return {
       survey_id: selectedSurvey.id,
       survey_title: selectedSurvey.title,
       interviewer_id: user?.id,
@@ -183,7 +181,27 @@ export default function FieldApp() {
       notes,
       completed_at: new Date().toISOString(),
       edit_history: [],
-    });
+    };
+  };
+
+  const saveAsDraft = () => {
+    const data = buildInterviewData();
+    const draftId = saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
+    setCurrentDraftId(draftId);
+    alert("Rascunho salvo! Será sincronizado quando a conexão for restabelecida.");
+  };
+
+  const submit = async () => {
+    setSaving(true);
+    const interviewData = buildInterviewData();
+    if (!isOnline) {
+      saveDraft({ ...interviewData, _draftId: currentDraftId });
+      setSaving(false);
+      setStep("done");
+      return;
+    }
+    await base44.entities.Interview.create(interviewData);
+    if (currentDraftId) removeDraft(currentDraftId);
     setSaving(false);
     setStep("done");
   };
