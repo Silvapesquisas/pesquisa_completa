@@ -305,12 +305,26 @@ export default function FieldApp() {
   if (step === "interview" && currentQuestion) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
+        {showIndex && (
+          <QuestionIndex
+            questions={visibleQuestions}
+            currentIndex={currentIndex}
+            answers={answers}
+            onSelect={setCurrentIndex}
+            onClose={() => setShowIndex(false)}
+          />
+        )}
         <div className="bg-blue-600 text-white p-5">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs opacity-75 truncate">{selectedSurvey?.title}</p>
-            <button onClick={saveAsDraft} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
-              <Save className="w-3 h-3" /> Salvar
-            </button>
+            <p className="text-xs opacity-75 truncate flex-1 mr-2">{selectedSurvey?.title}</p>
+            <div className="flex items-center gap-3 shrink-0">
+              <button onClick={() => setShowIndex(true)} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
+                <List className="w-3 h-3" /> Índice
+              </button>
+              <button onClick={() => saveAsDraft(false)} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
+                <Save className="w-3 h-3" /> Salvar
+              </button>
+            </div>
           </div>
           <div className="flex items-center justify-between mt-2">
             <span className="text-sm font-medium">Questão {currentIndex + 1} de {visibleQuestions.length}</span>
@@ -320,7 +334,7 @@ export default function FieldApp() {
             <div className="bg-white h-1.5 rounded-full transition-all" style={{ width: `${((currentIndex + 1) / visibleQuestions.length) * 100}%` }} />
           </div>
         </div>
-        <div className="flex-1 p-5 space-y-5">
+        <div className="flex-1 p-5 space-y-5 pb-32">
           <p className="text-lg font-semibold text-gray-900 leading-snug">{currentQuestion.text}</p>
           <QuestionField
             question={currentQuestion}
@@ -328,14 +342,17 @@ export default function FieldApp() {
             onChange={val => setAnswers(a => ({ ...a, [currentQuestion.id]: val }))}
           />
         </div>
-        <div className="bg-white border-t p-4 flex gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex gap-2">
           {currentIndex > 0 ? (
-            <Button variant="outline" onClick={() => setCurrentIndex(i => i - 1)}>
+            <Button variant="outline" className="shrink-0" onClick={() => setCurrentIndex(i => i - 1)}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
           ) : (
-            <Button variant="outline" onClick={resetInterview}>Sair</Button>
+            <Button variant="outline" className="shrink-0" onClick={resetInterview}>Sair</Button>
           )}
+          <Button variant="outline" className="shrink-0" onClick={() => saveAsDraft(true)}>
+            <Save className="w-4 h-4 mr-1" /> Sair
+          </Button>
           <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={goNext}>
             {currentIndex < visibleQuestions.length - 1 ? <><ChevronRight className="w-4 h-4 mr-1" /> Próxima</> : "Revisar e Enviar"}
           </Button>
