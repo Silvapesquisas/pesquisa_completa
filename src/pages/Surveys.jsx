@@ -143,12 +143,21 @@ export default function Surveys() {
                   {s.created_date && <span>{format(new Date(s.created_date), "dd/MM/yyyy", { locale: ptBR })}</span>}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 flex-wrap">
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate(createPageUrl(`SurveyBuilder?id=${s.id}`))}>
                     <Edit className="w-3 h-3 mr-1" /> Editar
                   </Button>
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate(createPageUrl(`Interviews?survey_id=${s.id}`))}>
                     <BarChart2 className="w-3 h-3 mr-1" /> Dados
+                  </Button>
+                  <Button size="sm" variant="ghost" title="Duplicar" onClick={() => duplicateSurvey(s)}>
+                    <Copy className="w-4 h-4 text-gray-400" />
+                  </Button>
+                  <Button size="sm" variant="ghost" title="Versões" onClick={() => openVersions(s)}>
+                    <History className="w-4 h-4 text-gray-400" />
+                  </Button>
+                  <Button size="sm" variant="ghost" title="Salvar versão atual" onClick={() => saveVersion(s)}>
+                    <span className="text-xs text-blue-500">v+</span>
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => toggleStatus(s)}>
                     {s.status === "ativa" ? <Pause className="w-4 h-4 text-orange-500" /> : <Play className="w-4 h-4 text-green-500" />}
