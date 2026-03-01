@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2 } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2, Square } from "lucide-react";
 import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
 
 function QuestionField({ question, value, onChange }) {
