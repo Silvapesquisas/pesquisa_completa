@@ -139,6 +139,56 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Offline surveys management */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <HardDrive className="w-4 h-4 text-blue-500" />
+              Pesquisas para Uso Offline
+            </CardTitle>
+            {!isOnline && <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs">Sem conexão</Badge>}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Baixe pesquisas para realizar entrevistas sem internet.</p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {loading ? (
+            <p className="text-gray-400 text-sm">Carregando...</p>
+          ) : activeSurveysList.length === 0 ? (
+            <p className="text-gray-400 text-sm">Nenhuma pesquisa ativa no momento.</p>
+          ) : activeSurveysList.map(s => {
+            const isDownloaded = offlineIds.has(s.id);
+            return (
+              <div key={s.id} className="flex items-center justify-between py-2.5 border-b last:border-0 gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm text-gray-800 truncate">{s.title}</p>
+                    {isDownloaded && (
+                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full shrink-0">
+                        <CheckCircle2 className="w-3 h-3" /> Offline
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 capitalize mt-0.5">{s.category} · {s.questions?.length || 0} questões</p>
+                </div>
+                {isOnline && (
+                  isDownloaded ? (
+                    <Button size="sm" variant="ghost" onClick={() => removeSurveyOffline(s.id)} className="text-xs text-red-400 hover:text-red-600 hover:bg-red-50 shrink-0">
+                      Remover
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => downloadSurvey(s)} className="text-xs shrink-0">
+                      <Download className="w-3 h-3 mr-1" /> Baixar
+                    </Button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </div>
     </div>
   );
 }
