@@ -22,7 +22,7 @@ const QUESTION_TYPES = [
   { value: "sim_nao", label: "Sim / Não" },
 ];
 
-function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, onMoveDown, index, total }) {
+function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, onMoveDown, index, total, dragHandleProps }) {
   const [expanded, setExpanded] = useState(true);
   const hasOptions = ["multipla_escolha", "unica_escolha"].includes(question.type);
 
