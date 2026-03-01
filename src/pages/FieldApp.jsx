@@ -91,9 +91,11 @@ export default function FieldApp() {
   const [currentDraftId, setCurrentDraftId] = useState(null);
   const [showIndex, setShowIndex] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [autoSaveMsg, setAutoSaveMsg] = useState("");
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
+  const autoSaveTimer = useRef(null);
 
   const {
     isOnline, drafts, syncing, lastSynced, syncLogs,
