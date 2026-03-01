@@ -56,6 +56,8 @@ import InterviewEdit from './pages/InterviewEdit';
 import FieldApp from './pages/FieldApp';
 import Users from './pages/Users';
 import Reports from './pages/Reports';
+import Interviewers from './pages/Interviewers';
+import Companies from './pages/Companies';
 import __Layout from './Layout.jsx';
 
 
@@ -69,6 +71,8 @@ export const PAGES = {
     "FieldApp": FieldApp,
     "Users": Users,
     "Reports": Reports,
+    "Interviewers": Interviewers,
+    "Companies": Companies,
 }
 
 export const pagesConfig = {
