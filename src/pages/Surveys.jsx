@@ -11,7 +11,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 
 const statusColor = { rascunho: "secondary", ativa: "default", pausada: "outline", encerrada: "destructive" };
 const categoryLabel = { urbano: "🏙️ Urbano", rural: "🌾 Rural", ambiental: "🌿 Ambiental", social: "👥 Social", outro: "📋 Outro" };
