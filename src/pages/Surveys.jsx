@@ -21,6 +21,9 @@ export default function Surveys() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [versioningSurvey, setVersioningSurvey] = useState(null);
   const navigate = useNavigate();
 
   const load = () => {
