@@ -55,6 +55,7 @@ import InterviewDetail from './pages/InterviewDetail';
 import InterviewEdit from './pages/InterviewEdit';
 import FieldApp from './pages/FieldApp';
 import Users from './pages/Users';
+import Reports from './pages/Reports';
 
 
 export const PAGES = {
@@ -66,6 +67,7 @@ export const PAGES = {
     "InterviewEdit": InterviewEdit,
     "FieldApp": FieldApp,
     "Users": Users,
+    "Reports": Reports,
 }
 
 export const pagesConfig = {
