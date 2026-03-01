@@ -38,7 +38,9 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
         const isDownloaded = offlineIds.has(s.id);
         const offlineInfo = offlineSurveys.find(o => o.id === s.id);
         return (
-          <Card key={s.id} className={`border-0 shadow-sm transition-shadow hover:shadow-md ${isDownloaded ? "border-l-4 border-l-blue-400" : ""}`}>
+          <Card key={s.id}
+            className={`border-0 shadow-sm transition-shadow hover:shadow-md cursor-pointer ${isDownloaded ? "border-l-4 border-l-blue-400" : ""}`}
+            onClick={() => onSelect(s)}>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -56,7 +58,7 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
                   )}
                 </p>
               </div>
-              <div className="flex gap-1 shrink-0">
+              <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                 {isOnline && !isDownloaded && (
                   <Button size="sm" variant="outline" onClick={() => onDownload(s)} className="text-xs h-8">
                     <Download className="w-3 h-3 mr-1" /> Baixar
