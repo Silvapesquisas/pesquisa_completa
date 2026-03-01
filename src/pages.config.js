@@ -50,12 +50,14 @@
 import Dashboard from './pages/Dashboard';
 import Surveys from './pages/Surveys';
 import SurveyBuilder from './pages/SurveyBuilder';
+import Interviews from './pages/Interviews';
 
 
 export const PAGES = {
     "Dashboard": Dashboard,
     "Surveys": Surveys,
     "SurveyBuilder": SurveyBuilder,
+    "Interviews": Interviews,
 }
 
 export const pagesConfig = {
