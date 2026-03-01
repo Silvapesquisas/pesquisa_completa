@@ -89,6 +89,8 @@ export default function FieldApp() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState(null);
+  const [showIndex, setShowIndex] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
