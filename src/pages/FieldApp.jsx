@@ -337,6 +337,8 @@ export default function FieldApp() {
         <p className="text-gray-500 text-sm mt-1">Olá, {user?.full_name || user?.email || "entrevistador"}</p>
       </div>
 
+      <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
+
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Pesquisas Disponíveis</h2>
         {surveys.length === 0 && (
