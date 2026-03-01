@@ -3,16 +3,19 @@ import { base44 } from "@/api/base44Client";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut
+  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 const navItems = [
   { label: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
   { label: "Pesquisas", page: "Surveys", icon: ClipboardList },
   { label: "Entrevistas", page: "Interviews", icon: FileText },
+  { label: "Entrevistadores", page: "Interviewers", icon: UserSquare2 },
   { label: "Relatórios", page: "Reports", icon: Map },
   { label: "Usuários", page: "Users", icon: Users },
+  { label: "Empresas", page: "Companies", icon: Building2 },
 ];
 
 export default function Layout({ children, currentPageName }) {
