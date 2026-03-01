@@ -229,10 +229,28 @@ export default function FieldApp() {
     if (confirm("Excluir este rascunho?")) removeDraft(draftId);
   };
 
+  // Auto-save every 30 seconds during interview
+  useEffect(() => {
+    if (step !== "interview") {
+      if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
+      return;
+    }
+    autoSaveTimer.current = setInterval(() => {
+      if (selectedSurvey) {
+        const data = buildInterviewData();
+        saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
+        setAutoSaveMsg("Salvo automaticamente");
+        setTimeout(() => setAutoSaveMsg(""), 2000);
+      }
+    }, 30000);
+    return () => clearInterval(autoSaveTimer.current);
+  }, [step, answers, currentDraftId, selectedSurvey]);
+
   const resetInterview = () => {
     setStep("select"); setSelectedSurvey(null); setAnswers({});
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
+    if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
   };
 
   // ── DONE ──
