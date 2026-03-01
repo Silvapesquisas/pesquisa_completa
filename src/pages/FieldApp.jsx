@@ -82,7 +82,7 @@ export default function FieldApp() {
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [step, setStep] = useState("select"); // select | interview | done
+  const [step, setStep] = useState("select"); // select | interview | review | done
   const [location, setLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -90,13 +90,16 @@ export default function FieldApp() {
   const [audioDuration, setAudioDuration] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [currentDraftId, setCurrentDraftId] = useState(null);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
 
+  const { isOnline, drafts, syncing, lastSynced, saveDraft, removeDraft, syncDrafts } = useOfflineSync();
+
   useEffect(() => {
     base44.auth.me().then(u => setUser(u));
-    base44.entities.Survey.filter({ status: "ativa" }).then(setSurveys);
+    base44.entities.Survey.filter({ status: "ativa" }).catch(() => []).then(d => { if (d) setSurveys(d); });
   }, []);
 
   const getLocation = () => {
