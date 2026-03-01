@@ -172,6 +172,30 @@ export default function Surveys() {
           {filtered.length === 0 && <p className="text-gray-400 text-sm col-span-3">Nenhuma pesquisa encontrada.</p>}
         </div>
       )}
+
+      {/* Versions Dialog */}
+      <Dialog open={versionsOpen} onOpenChange={setVersionsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Versões — {versioningSurvey?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {versions.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">Nenhuma versão salva ainda.<br/>Use o botão "v+" para salvar a versão atual.</p>
+            ) : versions.map(v => (
+              <div key={v.id} className="flex items-center justify-between py-2.5 border-b last:border-0 gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{v.note || `v${v.version_number}`}</p>
+                  <p className="text-xs text-gray-400">{v.snapshot?.questions?.length || 0} questões</p>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs shrink-0" onClick={() => restoreVersion(v)}>
+                  Restaurar
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
