@@ -390,6 +390,11 @@ export default function FieldApp() {
           <Button variant="outline" className="shrink-0" onClick={() => saveAsDraft(true)}>
             <Save className="w-4 h-4 mr-1" /> Sair
           </Button>
+          {!currentQuestion?.required && (
+            <Button variant="ghost" className="shrink-0 text-gray-400 text-xs" onClick={skipQuestion}>
+              Pular
+            </Button>
+          )}
           <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={goNext}>
             {currentIndex < visibleQuestions.length - 1 ? <><ChevronRight className="w-4 h-4 mr-1" /> Próxima</> : "Revisar e Enviar"}
           </Button>
