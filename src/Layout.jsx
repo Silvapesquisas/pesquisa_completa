@@ -129,7 +129,8 @@ export default function Layout({ children, currentPageName }) {
       {/* Mobile top bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></Button>
-        <span className="font-bold text-gray-900 text-sm">FieldSurvey</span>
+        <span className="font-bold text-gray-900 text-sm flex-1">FieldSurvey</span>
+        <NotificationBell user={user} />
       </div>
 
       {/* Main content */}
