@@ -3,11 +3,12 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, ClipboardList, Loader2, Save } from "lucide-react";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
+import DraftsList from "@/components/fieldapp/DraftsList";
+import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 
 function QuestionField({ question, value, onChange }) {
   const type = question.type;
@@ -15,7 +16,6 @@ function QuestionField({ question, value, onChange }) {
   if (type === "aberta") {
     return <Textarea value={value || ""} onChange={e => onChange(e.target.value)} placeholder="Sua resposta..." rows={3} className="text-base" />;
   }
-
   if (type === "sim_nao") {
     return (
       <div className="grid grid-cols-2 gap-3">
@@ -28,7 +28,6 @@ function QuestionField({ question, value, onChange }) {
       </div>
     );
   }
-
   if (type === "escala") {
     return (
       <div className="grid grid-cols-5 gap-2">
@@ -41,7 +40,6 @@ function QuestionField({ question, value, onChange }) {
       </div>
     );
   }
-
   if (type === "unica_escolha") {
     return (
       <div className="space-y-2">
@@ -54,7 +52,6 @@ function QuestionField({ question, value, onChange }) {
       </div>
     );
   }
-
   if (type === "multipla_escolha") {
     const selected = value ? value.split("|") : [];
     const toggle = (opt) => {
@@ -72,13 +69,12 @@ function QuestionField({ question, value, onChange }) {
       </div>
     );
   }
-
   return <Input value={value || ""} onChange={e => onChange(e.target.value)} placeholder="Resposta..." className="text-base" />;
 }
 
 export default function FieldApp() {
   const [user, setUser] = useState(null);
-  const [surveys, setSurveys] = useState([]);
+  const [onlineSurveys, setOnlineSurveys] = useState([]);
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -95,20 +91,29 @@ export default function FieldApp() {
   const audioChunks = useRef([]);
   const startTime = useRef(null);
 
-  const { isOnline, drafts, syncing, lastSynced, saveDraft, removeDraft, syncDrafts } = useOfflineSync();
+  const {
+    isOnline, drafts, syncing, lastSynced, syncLogs,
+    saveDraft, removeDraft, syncDrafts, clearLogs,
+    offlineSurveys, downloadSurvey, removeSurveyOffline, totalStorageBytes,
+  } = useOfflineSync();
+
+  // Merged survey list: offline-downloaded first, then online
+  const allSurveys = [
+    ...offlineSurveys,
+    ...onlineSurveys.filter(s => !offlineSurveys.find(o => o.id === s.id)),
+  ];
 
   useEffect(() => {
-    base44.auth.me().then(u => setUser(u));
-    base44.entities.Survey.filter({ status: "ativa" }).catch(() => []).then(d => { if (d) setSurveys(d); });
-  }, []);
+    base44.auth.me().then(u => setUser(u)).catch(() => {});
+    if (isOnline) {
+      base44.entities.Survey.filter({ status: "ativa" }).then(setOnlineSurveys).catch(() => {});
+    }
+  }, [isOnline]);
 
   const getLocation = () => {
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationLoading(false);
-      },
+      pos => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationLoading(false); },
       () => { alert("Não foi possível obter localização."); setLocationLoading(false); }
     );
   };
@@ -132,10 +137,7 @@ export default function FieldApp() {
     setRecording(true);
   };
 
-  const stopRecording = () => {
-    mediaRecorder.current?.stop();
-    setRecording(false);
-  };
+  const stopRecording = () => { mediaRecorder.current?.stop(); setRecording(false); };
 
   const visibleQuestions = (selectedSurvey?.questions || []).filter(q => {
     if (!q.depends_on_question_id) return true;
@@ -147,10 +149,7 @@ export default function FieldApp() {
   const currentQuestion = visibleQuestions[currentIndex];
 
   const goNext = () => {
-    if (currentQuestion?.required && !answers[currentQuestion.id]) {
-      alert("Esta questão é obrigatória.");
-      return;
-    }
+    if (currentQuestion?.required && !answers[currentQuestion.id]) { alert("Esta questão é obrigatória."); return; }
     if (currentIndex < visibleQuestions.length - 1) setCurrentIndex(i => i + 1);
     else setStep("review");
   };
@@ -160,9 +159,7 @@ export default function FieldApp() {
       const raw = answers[q.id] || "";
       const isMulti = q.type === "multipla_escolha";
       return {
-        question_id: q.id,
-        question_text: q.text,
-        question_type: q.type,
+        question_id: q.id, question_text: q.text, question_type: q.type,
         answer: isMulti ? raw.split("|").join(", ") : raw,
         answer_array: isMulti ? raw.split("|").filter(Boolean) : [],
       };
@@ -188,7 +185,7 @@ export default function FieldApp() {
     const data = buildInterviewData();
     const draftId = saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
     setCurrentDraftId(draftId);
-    alert("Rascunho salvo! Será sincronizado quando a conexão for restabelecida.");
+    alert("Rascunho salvo!");
   };
 
   const submit = async () => {
@@ -206,45 +203,58 @@ export default function FieldApp() {
     setStep("done");
   };
 
+  const loadDraft = (draft) => {
+    const survey = allSurveys.find(s => s.id === draft.survey_id);
+    if (!survey) { alert("Pesquisa do rascunho não encontrada. Baixe-a para uso offline."); return; }
+    // Rebuild answers map from formatted answers
+    const answersMap = {};
+    (draft.answers || []).forEach(a => {
+      answersMap[a.question_id] = a.answer_array?.length > 0 ? a.answer_array.join("|") : a.answer;
+    });
+    setSelectedSurvey(survey);
+    setAnswers(answersMap);
+    setNotes(draft.notes || "");
+    setCurrentDraftId(draft._draftId);
+    setCurrentIndex(0);
+    setStep("interview");
+  };
+
+  const deleteDraft = (draftId) => {
+    if (confirm("Excluir este rascunho?")) removeDraft(draftId);
+  };
+
   const resetInterview = () => {
     setStep("select"); setSelectedSurvey(null); setAnswers({});
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
     setNotes(""); setCurrentDraftId(null);
   };
 
+  // ── DONE ──
   if (step === "done") {
     const savedOffline = !isOnline;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex flex-col items-center justify-center p-6">
-        <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          {savedOffline ? "Rascunho Salvo!" : "Entrevista Enviada!"}
-        </h2>
-        <p className="text-gray-500 mb-2 text-center">
-          {savedOffline
-            ? "Sem conexão. Os dados foram salvos localmente e serão sincronizados automaticamente."
-            : "Os dados foram registrados com sucesso."}
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex flex-col items-center justify-center p-6 gap-4">
+        <CheckCircle2 className="w-16 h-16 text-green-500" />
+        <h2 className="text-2xl font-bold text-gray-900">{savedOffline ? "Rascunho Salvo!" : "Entrevista Enviada!"}</h2>
+        <p className="text-gray-500 text-center text-sm">
+          {savedOffline ? "Sem conexão. Dados salvos localmente e sincronizados automaticamente ao voltar online." : "Registrado com sucesso."}
         </p>
-        {drafts.length > 0 && (
-          <div className="mb-4 w-full max-w-sm">
-            <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
-          </div>
-        )}
-        <Button onClick={resetInterview} className="bg-green-600 hover:bg-green-700">
-          Nova Entrevista
-        </Button>
+        <div className="w-full max-w-sm">
+          <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} syncLogs={syncLogs} onClearLogs={clearLogs} />
+        </div>
+        <Button onClick={resetInterview} className="bg-green-600 hover:bg-green-700">Nova Entrevista</Button>
       </div>
     );
   }
 
+  // ── REVIEW ──
   if (step === "review") {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 space-y-4 pb-24">
+      <div className="min-h-screen bg-gray-50 p-4 space-y-4 pb-36">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-1">Revisão Final</h2>
           <p className="text-sm text-gray-500">{selectedSurvey?.title}</p>
         </div>
-
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
           <h3 className="font-semibold text-gray-700 text-sm">Localização</h3>
           {location ? (
@@ -256,31 +266,26 @@ export default function FieldApp() {
             </Button>
           )}
         </div>
-
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
           <h3 className="font-semibold text-gray-700 text-sm">Áudio</h3>
-          {audioUrl ? (
-            <audio controls src={audioUrl} className="w-full" />
-          ) : (
+          {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : (
             <Button variant="outline" size="sm" onClick={recording ? stopRecording : startRecording} className={`w-full ${recording ? "border-red-300 text-red-600" : ""}`}>
               {recording ? <><MicOff className="w-4 h-4 mr-2" /> Parar Gravação</> : <><Mic className="w-4 h-4 mr-2" /> Gravar Áudio</>}
             </Button>
           )}
         </div>
-
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h3 className="font-semibold text-gray-700 text-sm mb-2">Observações</h3>
           <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observações adicionais..." rows={3} />
         </div>
-
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-2">
-          <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
+          <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} syncLogs={syncLogs} onClearLogs={clearLogs} />
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => { setStep("interview"); setCurrentIndex(visibleQuestions.length - 1); }}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <Button variant="outline" className="flex-1" onClick={saveAsDraft}>
-              <Save className="w-4 h-4 mr-1" /> Salvar Rascunho
+              <Save className="w-4 h-4 mr-1" /> Rascunho
             </Button>
             <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={submit} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
@@ -292,11 +297,17 @@ export default function FieldApp() {
     );
   }
 
+  // ── INTERVIEW ──
   if (step === "interview" && currentQuestion) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <div className="bg-blue-600 text-white p-5">
-          <p className="text-xs opacity-75">{selectedSurvey?.title}</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs opacity-75 truncate">{selectedSurvey?.title}</p>
+            <button onClick={saveAsDraft} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
+              <Save className="w-3 h-3" /> Salvar
+            </button>
+          </div>
           <div className="flex items-center justify-between mt-2">
             <span className="text-sm font-medium">Questão {currentIndex + 1} de {visibleQuestions.length}</span>
             {currentQuestion.required && <Badge className="bg-blue-800 text-white text-xs">Obrigatória</Badge>}
@@ -305,7 +316,6 @@ export default function FieldApp() {
             <div className="bg-white h-1.5 rounded-full transition-all" style={{ width: `${((currentIndex + 1) / visibleQuestions.length) * 100}%` }} />
           </div>
         </div>
-
         <div className="flex-1 p-5 space-y-5">
           <p className="text-lg font-semibold text-gray-900 leading-snug">{currentQuestion.text}</p>
           <QuestionField
@@ -314,12 +324,13 @@ export default function FieldApp() {
             onChange={val => setAnswers(a => ({ ...a, [currentQuestion.id]: val }))}
           />
         </div>
-
         <div className="bg-white border-t p-4 flex gap-3">
-          {currentIndex > 0 && (
-            <Button variant="outline" className="flex-1" onClick={() => setCurrentIndex(i => i - 1)}>
-              <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
+          {currentIndex > 0 ? (
+            <Button variant="outline" onClick={() => setCurrentIndex(i => i - 1)}>
+              <ChevronLeft className="w-4 h-4" />
             </Button>
+          ) : (
+            <Button variant="outline" onClick={resetInterview}>Sair</Button>
           )}
           <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={goNext}>
             {currentIndex < visibleQuestions.length - 1 ? <><ChevronRight className="w-4 h-4 mr-1" /> Próxima</> : "Revisar e Enviar"}
@@ -329,39 +340,35 @@ export default function FieldApp() {
     );
   }
 
-  // Select survey screen
+  // ── SELECT ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-5 space-y-5">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-5 space-y-5 pb-10">
       <div className="pt-6">
         <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
         <p className="text-gray-500 text-sm mt-1">Olá, {user?.full_name || user?.email || "entrevistador"}</p>
       </div>
 
-      <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
+      <SyncStatusBar
+        isOnline={isOnline} syncing={syncing} drafts={drafts}
+        lastSynced={lastSynced} onSync={syncDrafts}
+        syncLogs={syncLogs} onClearLogs={clearLogs}
+      />
 
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Pesquisas Disponíveis</h2>
-        {surveys.length === 0 && (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-8 text-center text-gray-400">
-              <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhuma pesquisa ativa disponível.</p>
-            </CardContent>
-          </Card>
-        )}
-        {surveys.map(s => (
-          <Card key={s.id} className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}>
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">{s.title}</h3>
-                <p className="text-xs text-gray-400 mt-1 capitalize">{s.category} · {s.questions?.length || 0} questões</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <DraftsList
+        drafts={drafts}
+        onEdit={loadDraft}
+        onDelete={deleteDraft}
+      />
+
+      <OfflineSurveys
+        surveys={allSurveys}
+        offlineSurveys={offlineSurveys}
+        onDownload={downloadSurvey}
+        onRemove={removeSurveyOffline}
+        totalStorageBytes={totalStorageBytes}
+        isOnline={isOnline}
+        onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}
+      />
     </div>
   );
 }
