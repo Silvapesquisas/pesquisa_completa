@@ -273,14 +273,20 @@ export default function FieldApp() {
           <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Observações adicionais..." rows={3} />
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={() => { setStep("interview"); setCurrentIndex(visibleQuestions.length - 1); }}>
-            <ChevronLeft className="w-4 h-4 mr-1" /> Voltar
-          </Button>
-          <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={submit} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-            {saving ? "Enviando..." : "Enviar Entrevista"}
-          </Button>
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 space-y-2">
+          <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setStep("interview"); setCurrentIndex(visibleQuestions.length - 1); }}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={saveAsDraft}>
+              <Save className="w-4 h-4 mr-1" /> Salvar Rascunho
+            </Button>
+            <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={submit} disabled={saving}>
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              {saving ? "Enviando..." : isOnline ? "Enviar" : "Salvar Offline"}
+            </Button>
+          </div>
         </div>
       </div>
     );
