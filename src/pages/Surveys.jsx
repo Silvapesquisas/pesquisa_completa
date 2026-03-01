@@ -43,6 +43,45 @@ export default function Surveys() {
     load();
   };
 
+  const duplicateSurvey = async (s) => {
+    const { id, created_date, updated_date, ...rest } = s;
+    await base44.entities.Survey.create({
+      ...rest,
+      title: `${s.title} (Cópia)`,
+      status: "rascunho",
+      questions: (s.questions || []).map(q => ({ ...q, id: crypto.randomUUID() })),
+    });
+    load();
+  };
+
+  const openVersions = async (s) => {
+    setVersioningSurvey(s);
+    const vs = await base44.entities.SurveyVersion.filter({ survey_id: s.id }, "-created_date");
+    setVersions(vs);
+    setVersionsOpen(true);
+  };
+
+  const saveVersion = async (s) => {
+    const existing = await base44.entities.SurveyVersion.filter({ survey_id: s.id }, "-version_number", 1);
+    const nextVersion = (existing[0]?.version_number || 0) + 1;
+    await base44.entities.SurveyVersion.create({
+      survey_id: s.id,
+      version_number: nextVersion,
+      title: s.title,
+      snapshot: s,
+      note: `v${nextVersion} - ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}`,
+    });
+    alert(`Versão v${nextVersion} salva!`);
+  };
+
+  const restoreVersion = async (version) => {
+    if (!confirm(`Restaurar para ${version.note}? Isso sobrescreverá a pesquisa atual.`)) return;
+    const { id, created_date, updated_date, ...snapshot } = version.snapshot;
+    await base44.entities.Survey.update(versioningSurvey.id, snapshot);
+    setVersionsOpen(false);
+    load();
+  };
+
   const filtered = surveys.filter(s => {
     const matchSearch = s.title?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "todos" || s.status === filterStatus;
