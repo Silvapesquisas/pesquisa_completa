@@ -249,19 +249,34 @@ export default function SurveyBuilder() {
           </Button>
         </div>
 
-        {survey.questions.map((q, i) => (
-          <QuestionCard
-            key={q.id}
-            question={q}
-            allQuestions={survey.questions}
-            onChange={updated => updateQuestion(q.id, updated)}
-            onDelete={() => deleteQuestion(q.id)}
-            onMoveUp={() => moveQuestion(i, -1)}
-            onMoveDown={() => moveQuestion(i, 1)}
-            index={i}
-            total={survey.questions.length}
-          />
-        ))}
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="questions">
+            {(provided) => (
+              <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3">
+                {survey.questions.map((q, i) => (
+                  <Draggable key={q.id} draggableId={q.id} index={i}>
+                    {(prov) => (
+                      <div ref={prov.innerRef} {...prov.draggableProps}>
+                        <QuestionCard
+                          question={q}
+                          allQuestions={survey.questions}
+                          onChange={updated => updateQuestion(q.id, updated)}
+                          onDelete={() => deleteQuestion(q.id)}
+                          onMoveUp={() => moveQuestion(i, -1)}
+                          onMoveDown={() => moveQuestion(i, 1)}
+                          index={i}
+                          total={survey.questions.length}
+                          dragHandleProps={prov.dragHandleProps}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
 
         {survey.questions.length === 0 && (
           <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
