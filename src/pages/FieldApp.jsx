@@ -185,11 +185,11 @@ export default function FieldApp() {
     };
   };
 
-  const saveAsDraft = () => {
+  const saveAsDraft = (andExit = false) => {
     const data = buildInterviewData();
     const draftId = saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
     setCurrentDraftId(draftId);
-    alert("Rascunho salvo!");
+    if (andExit) { resetInterview(); } else { alert("Rascunho salvo!"); }
   };
 
   const submit = async () => {
