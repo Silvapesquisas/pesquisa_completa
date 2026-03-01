@@ -3,9 +3,11 @@ import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Users, MapPin, TrendingUp, Plus, ArrowRight } from "lucide-react";
+import { ClipboardList, Users, MapPin, TrendingUp, Plus, ArrowRight, Download, CheckCircle2, HardDrive } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
+import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
+import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 
 export default function Dashboard() {
   const [surveys, setSurveys] = useState([]);
