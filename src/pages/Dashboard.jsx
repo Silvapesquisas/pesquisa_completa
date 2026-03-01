@@ -8,6 +8,9 @@ import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
+import AIInsightsWidget from "@/components/dashboard/AIInsightsWidget";
+import InterviewMap from "@/components/dashboard/InterviewMap";
+import InterviewerPerformance from "@/components/dashboard/InterviewerPerformance";
 
 export default function Dashboard() {
   const [surveys, setSurveys] = useState([]);
