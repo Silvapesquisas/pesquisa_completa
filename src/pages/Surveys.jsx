@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Edit, BarChart2, Trash2, Play, Pause } from "lucide-react";
+import { Plus, Search, Edit, BarChart2, Trash2, Play, Pause, Copy, History } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const statusColor = { rascunho: "secondary", ativa: "default", pausada: "outline", encerrada: "destructive" };
 const categoryLabel = { urbano: "🏙️ Urbano", rural: "🌾 Rural", ambiental: "🌿 Ambiental", social: "👥 Social", outro: "📋 Outro" };
