@@ -206,18 +206,33 @@ export default function FieldApp() {
     setStep("done");
   };
 
+  const resetInterview = () => {
+    setStep("select"); setSelectedSurvey(null); setAnswers({});
+    setCurrentIndex(0); setLocation(null); setAudioUrl(null);
+    setNotes(""); setCurrentDraftId(null);
+  };
+
   if (step === "done") {
+    const savedOffline = !isOnline;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-6">
-        <div className="text-center">
-          <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Entrevista Enviada!</h2>
-          <p className="text-gray-500 mb-6">Os dados foram registrados com sucesso.</p>
-          <Button onClick={() => { setStep("select"); setSelectedSurvey(null); setAnswers({}); setCurrentIndex(0); setLocation(null); setAudioUrl(null); setNotes(""); }}
-            className="bg-green-600 hover:bg-green-700">
-            Nova Entrevista
-          </Button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex flex-col items-center justify-center p-6">
+        <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {savedOffline ? "Rascunho Salvo!" : "Entrevista Enviada!"}
+        </h2>
+        <p className="text-gray-500 mb-2 text-center">
+          {savedOffline
+            ? "Sem conexão. Os dados foram salvos localmente e serão sincronizados automaticamente."
+            : "Os dados foram registrados com sucesso."}
+        </p>
+        {drafts.length > 0 && (
+          <div className="mb-4 w-full max-w-sm">
+            <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} />
+          </div>
+        )}
+        <Button onClick={resetInterview} className="bg-green-600 hover:bg-green-700">
+          Nova Entrevista
+        </Button>
       </div>
     );
   }
