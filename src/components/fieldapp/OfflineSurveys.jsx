@@ -18,9 +18,17 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Pesquisas Disponíveis</h2>
-        <div className="flex items-center gap-1 text-xs text-gray-400">
-          <HardDrive className="w-3 h-3" />
-          <span>{formatBytes(totalStorageBytes)} usado</span>
+        <div className="flex items-center gap-2">
+          {isOnline && onRefresh && (
+            <Button size="sm" variant="ghost" onClick={onRefresh} disabled={loadingSurveys} className="h-7 px-2 text-xs text-blue-500 hover:text-blue-700">
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loadingSurveys ? "animate-spin" : ""}`} />
+              {loadingSurveys ? "Atualizando..." : "Atualizar"}
+            </Button>
+          )}
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <HardDrive className="w-3 h-3" />
+            <span>{formatBytes(totalStorageBytes)} usado</span>
+          </div>
         </div>
       </div>
 
