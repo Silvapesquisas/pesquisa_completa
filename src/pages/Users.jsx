@@ -54,11 +54,11 @@ export default function Users() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Usuários</h1>
-          <p className="text-gray-500 text-sm mt-1">{users.length} usuário(s) cadastrado(s)</p>
+          <h1 className="text-2xl font-bold text-gray-900">Usuários do Sistema</h1>
+          <p className="text-gray-500 text-sm mt-1">Gestores e administradores com acesso ao painel · {users.length} usuário(s)</p>
         </div>
         <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setInviteOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Convidar Usuário
+          <Plus className="w-4 h-4 mr-2" /> Convidar Gestor
         </Button>
       </div>
 
