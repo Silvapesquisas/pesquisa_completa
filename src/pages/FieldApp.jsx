@@ -395,15 +395,26 @@ export default function FieldApp() {
           <h2 className="text-lg font-bold text-gray-900 mb-1">Revisão Final</h2>
           <p className="text-sm text-gray-500">{selectedSurvey?.title}</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="font-semibold text-gray-700 text-sm">Localização</h3>
+        <div className={`rounded-2xl p-5 shadow-sm space-y-3 border-2 ${location ? "bg-white border-green-200" : "bg-orange-50 border-orange-300"}`}>
+          <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
+            <MapPin className={`w-4 h-4 ${location ? "text-green-600" : "text-orange-500"}`} />
+            Localização {!location && <span className="text-xs font-normal text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Recomendado</span>}
+          </h3>
           {location ? (
-            <p className="text-sm text-green-600 flex items-center gap-2"><MapPin className="w-4 h-4" /> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-green-600 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" /> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+              </p>
+              <button onClick={() => getLocation()} className="text-xs text-gray-400 hover:text-blue-600 underline">Atualizar</button>
+            </div>
           ) : (
-            <Button variant="outline" size="sm" onClick={getLocation} disabled={locationLoading} className="w-full">
-              {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MapPin className="w-4 h-4 mr-2" />}
-              Capturar Localização
-            </Button>
+            <div className="space-y-2">
+              <p className="text-xs text-orange-700">A localização não foi capturada ainda. Clique abaixo para tentar novamente.</p>
+              <Button size="sm" onClick={() => getLocation()} disabled={locationLoading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                {locationLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MapPin className="w-4 h-4 mr-2" />}
+                {locationLoading ? "Obtendo localização..." : "Capturar Localização"}
+              </Button>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
