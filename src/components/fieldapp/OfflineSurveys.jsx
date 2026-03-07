@@ -92,7 +92,7 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
                     </div>
                   )}
                 </div>
-              <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+              <div className="flex gap-1 shrink-0 mt-1" onClick={e => e.stopPropagation()}>
                 {isOnline && !isDownloaded && (
                   <Button size="sm" variant="outline" onClick={() => onDownload(s)} className="text-xs h-8">
                     <Download className="w-3 h-3 mr-1" /> Baixar
@@ -103,6 +103,7 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 )}
+              </div>
               </div>
             </CardContent>
           </Card>
