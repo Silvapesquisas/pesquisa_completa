@@ -11,6 +11,7 @@ import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
 import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 import QuestionIndex from "@/components/fieldapp/QuestionIndex";
+import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
 
 const FIELD_USER_KEY = "fieldapp_user";
 
