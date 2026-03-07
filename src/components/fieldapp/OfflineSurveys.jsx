@@ -46,7 +46,7 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
         const isDownloaded = offlineIds.has(s.id);
         const offlineInfo = offlineSurveys.find(o => o.id === s.id);
         const myCount = myInterviewCounts?.[s.id] || 0;
-        const limit = s.max_interviews_per_interviewer;
+        const limit = getEffectiveLimit ? getEffectiveLimit(s) : (s.max_interviews_per_interviewer || null);
         const target = s.target_interviews;
         const limitReached = limit && myCount >= limit;
         const progressPct = limit ? Math.min((myCount / limit) * 100, 100) : null;
