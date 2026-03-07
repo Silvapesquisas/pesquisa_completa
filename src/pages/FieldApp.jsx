@@ -594,7 +594,8 @@ export default function FieldApp() {
               <Badge variant="outline" className="ml-2 text-xs capitalize">{fieldUser.role}</Badge>
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <FieldNotifications fieldUser={fieldUser} />
             <button
               onClick={() => setShowTutorial(true)}
               className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors bg-blue-50 px-2.5 py-1.5 rounded-lg"
