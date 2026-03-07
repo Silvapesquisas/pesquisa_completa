@@ -470,6 +470,10 @@ export default function FieldApp() {
 
   // ── INTERVIEW ──
   if (step === "interview" && currentQuestion) {
+    const myCount = myInterviewCounts[selectedSurvey?.id] || 0;
+    const limit = selectedSurvey?.max_interviews_per_interviewer;
+    const limitReached = limit && myCount >= limit;
+
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {showIndex && (
@@ -485,6 +489,13 @@ export default function FieldApp() {
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs opacity-75 truncate flex-1 mr-2">{selectedSurvey?.title}</p>
             <div className="flex items-center gap-3 shrink-0">
+              {/* Audio recording at the top */}
+              <button
+                onClick={recording ? stopRecording : startRecording}
+                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all ${recording ? "bg-red-500 text-white animate-pulse" : "bg-blue-500 text-blue-100 hover:text-white"}`}
+              >
+                {recording ? <><MicOff className="w-3 h-3" /> Parar</> : <><Mic className="w-3 h-3" /> {audioUrl ? "Regravando" : "Gravar"}</>}
+              </button>
               <button onClick={() => setShowIndex(true)} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
                 <List className="w-3 h-3" /> Índice
               </button>
