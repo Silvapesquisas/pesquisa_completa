@@ -1,4 +1,4 @@
-import { Download, Trash2, CheckCircle2, HardDrive } from "lucide-react";
+import { Download, Trash2, CheckCircle2, HardDrive, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
