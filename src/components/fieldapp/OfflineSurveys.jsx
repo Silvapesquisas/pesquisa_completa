@@ -11,7 +11,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, onRemove, totalStorageBytes, isOnline, onSelect }) {
+export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, onRemove, totalStorageBytes, isOnline, onSelect, onRefresh, loadingSurveys }) {
   const offlineIds = new Set(offlineSurveys.map(s => s.id));
 
   return (
