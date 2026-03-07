@@ -22,16 +22,22 @@ export default function Dashboard() {
   const { drafts, offlineSurveys, downloadSurvey, removeSurveyOffline, isOnline } = useOfflineSync();
 
   useEffect(() => {
-    Promise.all([
-      base44.entities.Survey.list("-created_date", 50),
-      base44.entities.Interview.list("-created_date", 50),
-      base44.entities.User.list(),
-    ]).then(([s, i, u]) => {
+    base44.auth.me().then(async (me) => {
+      const companyId = me?.company_id;
+      const [s, i, u] = await Promise.all([
+        companyId
+          ? base44.entities.Survey.filter({ company_id: companyId }, "-created_date", 50)
+          : base44.entities.Survey.list("-created_date", 50),
+        companyId
+          ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date", 50)
+          : base44.entities.Interview.list("-created_date", 50),
+        base44.entities.User.list(),
+      ]);
       setSurveys(s);
       setInterviews(i);
       setUsers(u);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const offlineIds = new Set(offlineSurveys.map(s => s.id));
