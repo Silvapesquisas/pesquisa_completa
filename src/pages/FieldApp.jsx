@@ -507,12 +507,19 @@ export default function FieldApp() {
           <div className="flex items-center justify-between mt-2">
             <span className="text-sm font-medium">Questão {currentIndex + 1} de {visibleQuestions.length}</span>
             <div className="flex items-center gap-2">
+              {audioUrl && <span className="text-xs text-green-300 flex items-center gap-0.5"><Mic className="w-3 h-3" /> Áudio capturado</span>}
               {autoSaveMsg && <span className="text-xs text-blue-200 animate-pulse">{autoSaveMsg}</span>}
               {currentQuestion.required
                 ? <Badge className="bg-blue-800 text-white text-xs">Obrigatória</Badge>
                 : <Badge className="bg-blue-400/50 text-white text-xs">Opcional</Badge>}
             </div>
           </div>
+          {limitReached && (
+            <div className="mt-2 bg-orange-500 rounded-lg px-3 py-2 text-xs text-white flex items-center gap-2">
+              <Target className="w-3.5 h-3.5 shrink-0" />
+              Você atingiu o limite de {limit} entrevistas para esta pesquisa.
+            </div>
+          )}
           <div className="mt-3">
             <div className="flex justify-between text-xs text-blue-200 mb-1">
               <span>{Math.round(((currentIndex + 1) / visibleQuestions.length) * 100)}% concluído</span>
