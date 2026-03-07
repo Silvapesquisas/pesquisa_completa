@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, RefreshCw } from "lucide-react";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
 import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
