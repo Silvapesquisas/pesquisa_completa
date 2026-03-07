@@ -557,7 +557,7 @@ export default function FieldApp() {
           onRemove={removeSurveyOffline}
           totalStorageBytes={totalStorageBytes}
           isOnline={isOnline}
-          onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}
+          onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null); setStep("interview"); getLocation(true); }}
         />
       </div>
     </div>
