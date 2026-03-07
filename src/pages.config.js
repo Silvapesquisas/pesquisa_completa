@@ -47,32 +47,32 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
+import Companies from './pages/Companies';
 import Dashboard from './pages/Dashboard';
-import Surveys from './pages/Surveys';
-import SurveyBuilder from './pages/SurveyBuilder';
-import Interviews from './pages/Interviews';
+import FieldApp from './pages/FieldApp';
 import InterviewDetail from './pages/InterviewDetail';
 import InterviewEdit from './pages/InterviewEdit';
-import FieldApp from './pages/FieldApp';
-import Users from './pages/Users';
-import Reports from './pages/Reports';
 import Interviewers from './pages/Interviewers';
-import Companies from './pages/Companies';
+import Interviews from './pages/Interviews';
+import Reports from './pages/Reports';
+import SurveyBuilder from './pages/SurveyBuilder';
+import Surveys from './pages/Surveys';
+import Users from './pages/Users';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "Companies": Companies,
     "Dashboard": Dashboard,
-    "Surveys": Surveys,
-    "SurveyBuilder": SurveyBuilder,
-    "Interviews": Interviews,
+    "FieldApp": FieldApp,
     "InterviewDetail": InterviewDetail,
     "InterviewEdit": InterviewEdit,
-    "FieldApp": FieldApp,
-    "Users": Users,
-    "Reports": Reports,
     "Interviewers": Interviewers,
-    "Companies": Companies,
+    "Interviews": Interviews,
+    "Reports": Reports,
+    "SurveyBuilder": SurveyBuilder,
+    "Surveys": Surveys,
+    "Users": Users,
 }
 
 export const pagesConfig = {

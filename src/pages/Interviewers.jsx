@@ -9,14 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Search, Plus, UserCheck, UserX, Mail, Pencil, Trash2,
-  ClipboardList, Phone, MapPin, BarChart2
+  Search, Plus, UserCheck, UserX, Pencil, Trash2,
+  ClipboardList, Phone, MapPin, BarChart2, Copy, KeyRound
 } from "lucide-react";
 
 const PLAN_LIMITS = { basico: 5, profissional: 20, enterprise: 999 };
 
+function generateCode() {
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
+}
+
 export default function Interviewers() {
-  const [users, setUsers] = useState([]);
+  const [fieldUsers, setFieldUsers] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [company, setCompany] = useState(null);
@@ -24,33 +28,39 @@ export default function Interviewers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("entrevistador");
-  const [inviting, setInviting] = useState(false);
+  const [newForm, setNewForm] = useState({ name: "", role: "entrevistador", region: "", phone: "", notes: "" });
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(null);
 
   const load = async () => {
     const me = await base44.auth.me();
     setCurrentUser(me);
-    const [us, sv, iv] = await Promise.all([
-      base44.entities.User.list(),
-      base44.entities.Survey.list(),
+
+    let companyId = me?.company_id;
+    let co = null;
+    if (companyId) {
+      const cos = await base44.entities.Company.filter({ id: companyId });
+      if (cos.length > 0) co = cos[0];
+    }
+    setCompany(co);
+
+    const [fu, sv, iv] = await Promise.all([
+      companyId
+        ? base44.entities.FieldUser.filter({ company_id: companyId })
+        : base44.entities.FieldUser.list(),
+      companyId
+        ? base44.entities.Survey.filter({ company_id: companyId })
+        : base44.entities.Survey.list(),
       base44.entities.Interview.list("-created_date", 200),
     ]);
-    setUsers(us);
+    setFieldUsers(fu);
     setSurveys(sv);
     setInterviews(iv);
-
-    // Load company from User's company_id
-    if (me?.company_id) {
-      const cos = await base44.entities.Company.filter({ id: me.company_id });
-      if (cos.length > 0) setCompany(cos[0]);
-    }
     setLoading(false);
   };
 
@@ -58,13 +68,12 @@ export default function Interviewers() {
 
   const isAdmin = currentUser?.role === "admin";
   const maxInterviewers = company ? (company.max_interviewers || PLAN_LIMITS[company.plan] || 5) : 5;
-  const interviewerList = users.filter(u => u.role === "entrevistador" || u.role === "supervisor");
-  const activeCount = interviewerList.filter(u => u.active !== false).length;
+  const activeCount = fieldUsers.filter(u => u.active !== false).length;
   const canAddMore = activeCount < maxInterviewers;
 
-  const filtered = interviewerList.filter(u => {
-    const matchSearch = (u.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (u.email || "").toLowerCase().includes(search.toLowerCase());
+  const filtered = fieldUsers.filter(u => {
+    const matchSearch = (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.access_code || "").includes(search);
     const matchStatus = filterStatus === "todos" ||
       (filterStatus === "ativo" && u.active !== false) ||
       (filterStatus === "inativo" && u.active === false);
@@ -72,37 +81,36 @@ export default function Interviewers() {
   });
 
   const toggleActive = async (u) => {
-    await base44.entities.User.update(u.id, { active: !u.active });
+    await base44.entities.FieldUser.update(u.id, { active: !u.active });
     load();
   };
 
-  const invite = async () => {
-    if (!inviteEmail) return;
-    if (!canAddMore && inviteRole !== "admin") {
-      alert(`Limite de ${maxInterviewers} entrevistadores atingido para o plano atual.`);
+  const createUser = async () => {
+    if (!newForm.name) return;
+    if (!canAddMore) {
+      alert(`Limite de ${maxInterviewers} entrevistadores atingido.`);
       return;
     }
-    setInviting(true);
-    await base44.users.inviteUser(inviteEmail, inviteRole === "admin" ? "admin" : "user");
-    // Also set role in user entity after invitation (will take effect when they join)
-    setInviting(false);
-    setInviteOpen(false);
-    setInviteEmail("");
-
-    // Create notification
-    if (currentUser) {
-      await base44.entities.Notification.create({
-        user_email: currentUser.email,
-        type: "interviewer_added",
-        title: "Entrevistador convidado",
-        message: `Convite enviado para ${inviteEmail} com perfil ${inviteRole}.`,
-      });
-    }
+    setSaving(true);
+    const code = generateCode();
+    await base44.entities.FieldUser.create({
+      ...newForm,
+      access_code: code,
+      company_id: currentUser?.company_id || "",
+      company_name: company?.name || "",
+      active: true,
+      assigned_survey_ids: [],
+    });
+    setSaving(false);
+    setFormOpen(false);
+    setNewForm({ name: "", role: "entrevistador", region: "", phone: "", notes: "" });
     load();
   };
 
   const openEdit = (u) => {
     setEditData({
+      name: u.name || "",
+      role: u.role || "entrevistador",
       region: u.region || "",
       phone: u.phone || "",
       notes: u.notes || "",
@@ -115,9 +123,15 @@ export default function Interviewers() {
 
   const saveEdit = async () => {
     setSaving(true);
-    await base44.entities.User.update(selectedUser.id, editData);
+    await base44.entities.FieldUser.update(selectedUser.id, editData);
     setSaving(false);
     setEditOpen(false);
+    load();
+  };
+
+  const deleteUser = async (u) => {
+    if (!confirm(`Excluir ${u.name}? Esta ação não pode ser desfeita.`)) return;
+    await base44.entities.FieldUser.delete(u.id);
     load();
   };
 
@@ -127,7 +141,7 @@ export default function Interviewers() {
   };
 
   const getUserInterviews = (u) =>
-    interviews.filter(i => i.interviewer_id === u.id || i.interviewer_name === u.full_name);
+    interviews.filter(i => i.field_user_id === u.id || i.interviewer_name === u.name);
 
   const toggleSurveyAssign = (surveyId) => {
     const curr = editData.assigned_survey_ids || [];
@@ -136,6 +150,12 @@ export default function Interviewers() {
       ...prev,
       assigned_survey_ids: has ? curr.filter(id => id !== surveyId) : [...curr, surveyId],
     }));
+  };
+
+  const copyCode = (code, id) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   return (
@@ -152,26 +172,31 @@ export default function Interviewers() {
         {isAdmin && (
           <Button
             className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => setInviteOpen(true)}
+            onClick={() => setFormOpen(true)}
             disabled={!canAddMore}
             title={!canAddMore ? `Limite de ${maxInterviewers} atingido` : ""}
           >
-            <Plus className="w-4 h-4 mr-2" /> Convidar Entrevistador
+            <Plus className="w-4 h-4 mr-2" /> Cadastrar Entrevistador
           </Button>
         )}
       </div>
 
       {!canAddMore && isAdmin && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg">
-          ⚠️ Limite de {maxInterviewers} entrevistadores atingido para o plano atual. Faça upgrade para adicionar mais.
+          ⚠️ Limite de {maxInterviewers} entrevistadores atingido. Faça upgrade para adicionar mais.
         </div>
       )}
+
+      <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3 rounded-lg flex items-start gap-2">
+        <KeyRound className="w-4 h-4 mt-0.5 shrink-0" />
+        <span>Cada entrevistador recebe um <strong>código de 8 dígitos</strong> para acessar o App de Campo. Compartilhe o código com eles.</span>
+      </div>
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input placeholder="Buscar entrevistador..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="Buscar por nome ou código..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
@@ -186,7 +211,10 @@ export default function Interviewers() {
       {loading ? (
         <p className="text-gray-400 text-sm">Carregando...</p>
       ) : filtered.length === 0 ? (
-        <p className="text-gray-400 text-sm">Nenhum entrevistador encontrado.</p>
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-sm">Nenhum entrevistador encontrado.</p>
+          {isAdmin && <Button className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={() => setFormOpen(true)}><Plus className="w-4 h-4 mr-2" />Cadastrar primeiro entrevistador</Button>}
+        </div>
       ) : (
         <div className="space-y-3">
           {filtered.map(u => {
@@ -198,7 +226,7 @@ export default function Interviewers() {
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-900 text-sm">{u.full_name || "—"}</span>
+                      <span className="font-semibold text-gray-900 text-sm">{u.name}</span>
                       <Badge variant={u.role === "supervisor" ? "secondary" : "outline"} className="text-xs capitalize">
                         {u.role}
                       </Badge>
@@ -207,8 +235,22 @@ export default function Interviewers() {
                         : <Badge variant="default" className="text-xs bg-green-100 text-green-700 border-0">Ativo</Badge>
                       }
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">{u.email}</p>
-                    <div className="flex gap-4 mt-2 text-xs text-gray-500 flex-wrap">
+                    {/* Access Code */}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-xs text-gray-500">Código:</span>
+                      <code className="text-sm font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded tracking-widest">
+                        {u.access_code}
+                      </code>
+                      <button
+                        onClick={() => copyCode(u.access_code, u.id)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Copiar código"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      {copiedCode === u.id && <span className="text-xs text-green-600">Copiado!</span>}
+                    </div>
+                    <div className="flex gap-4 mt-1.5 text-xs text-gray-500 flex-wrap">
                       {u.region && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{u.region}</span>}
                       {u.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{u.phone}</span>}
                       <span className="flex items-center gap-1"><BarChart2 className="w-3 h-3" />{completed} entrevistas</span>
@@ -230,6 +272,9 @@ export default function Interviewers() {
                             ? <UserCheck className="w-4 h-4 text-green-500" />
                             : <UserX className="w-4 h-4 text-red-400" />}
                         </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deleteUser(u)}>
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </Button>
                       </>
                     )}
                   </div>
@@ -240,18 +285,18 @@ export default function Interviewers() {
         </div>
       )}
 
-      {/* Invite Dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+      {/* New User Dialog */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Convidar Entrevistador</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Cadastrar Entrevistador</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>
-              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@exemplo.com" type="email" />
+              <Label className="text-xs text-gray-500 mb-1 block">Nome Completo *</Label>
+              <Input value={newForm.name} onChange={e => setNewForm(p => ({ ...p, name: e.target.value }))} placeholder="Nome do entrevistador" />
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">Perfil</Label>
-              <Select value={inviteRole} onValueChange={setInviteRole}>
+              <Label className="text-xs text-gray-500 mb-1 block">Função</Label>
+              <Select value={newForm.role} onValueChange={v => setNewForm(p => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="entrevistador">Entrevistador</SelectItem>
@@ -259,8 +304,26 @@ export default function Interviewers() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={invite} disabled={inviting}>
-              <Mail className="w-4 h-4 mr-2" /> {inviting ? "Enviando..." : "Enviar Convite"}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 block">Região</Label>
+                <Input value={newForm.region} onChange={e => setNewForm(p => ({ ...p, region: e.target.value }))} placeholder="Ex: SP, RJ..." />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 block">Telefone</Label>
+                <Input value={newForm.phone} onChange={e => setNewForm(p => ({ ...p, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Observações</Label>
+              <Input value={newForm.notes} onChange={e => setNewForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notas internas..." />
+            </div>
+            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700 flex items-center gap-2">
+              <KeyRound className="w-4 h-4 shrink-0" />
+              Um código de 8 dígitos será gerado automaticamente.
+            </div>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={createUser} disabled={saving || !newForm.name}>
+              {saving ? "Cadastrando..." : "Cadastrar e Gerar Código"}
             </Button>
           </div>
         </DialogContent>
@@ -269,8 +332,22 @@ export default function Interviewers() {
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Editar: {selectedUser?.full_name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Editar: {selectedUser?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Nome</Label>
+              <Input value={editData.name || ""} onChange={e => setEditData(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Função</Label>
+              <Select value={editData.role || "entrevistador"} onValueChange={v => setEditData(p => ({ ...p, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entrevistador">Entrevistador</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Região</Label>
@@ -291,11 +368,11 @@ export default function Interviewers() {
                 {surveys.filter(s => s.status === "ativa").map(s => (
                   <div key={s.id} className="flex items-center gap-2">
                     <Checkbox
-                      id={s.id}
+                      id={`edit-${s.id}`}
                       checked={(editData.assigned_survey_ids || []).includes(s.id)}
                       onCheckedChange={() => toggleSurveyAssign(s.id)}
                     />
-                    <label htmlFor={s.id} className="text-sm text-gray-700 cursor-pointer">{s.title}</label>
+                    <label htmlFor={`edit-${s.id}`} className="text-sm text-gray-700 cursor-pointer">{s.title}</label>
                   </div>
                 ))}
                 {surveys.filter(s => s.status === "ativa").length === 0 && (
@@ -313,12 +390,19 @@ export default function Interviewers() {
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Histórico: {selectedUser?.full_name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Histórico: {selectedUser?.name}</DialogTitle></DialogHeader>
           {selectedUser && (() => {
             const userIvs = getUserInterviews(selectedUser);
             const completed = userIvs.filter(i => i.status === "concluida");
             return (
               <div className="space-y-4">
+                <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                  <KeyRound className="w-4 h-4 text-blue-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Código de Acesso</p>
+                    <code className="text-lg font-mono font-bold text-blue-700 tracking-widest">{selectedUser.access_code}</code>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: "Total", value: userIvs.length },
