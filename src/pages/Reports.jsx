@@ -221,6 +221,66 @@ Gere: resumo executivo, resultados por questão, padrões e conclusão.`;
             </div>
           </TabsContent>
 
+          <TabsContent value="interviewers">
+            {byInterviewer.length === 0 ? (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-8 text-center text-gray-400 text-sm">Nenhum dado disponível para os filtros selecionados.</CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {byInterviewer.map(({ name, value }) => {
+                  const interviewerData = filtered.filter(i => i.interviewer_name === name);
+                  const completed = interviewerData.filter(i => i.status === "concluida").length;
+                  const completionRate = value > 0 ? Math.round((completed / value) * 100) : 0;
+                  const withGeo = interviewerData.filter(i => i.latitude).length;
+                  const withAudio = interviewerData.filter(i => i.audio_url).length;
+
+                  // Avg duration estimate from audio
+                  const durations = interviewerData.filter(i => i.audio_duration).map(i => i.audio_duration);
+                  const avgDuration = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+
+                  return (
+                    <Card key={name} className="border-0 shadow-sm">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <div>
+                            <p className="font-semibold text-gray-900">{name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{value} entrevistas no período</p>
+                          </div>
+                          <Badge className={completionRate >= 80 ? "bg-green-100 text-green-800" : completionRate >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}>
+                            {completionRate}% conclusão
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { label: "Concluídas", value: completed, color: "text-green-600" },
+                            { label: "Com GPS", value: withGeo, color: "text-blue-600" },
+                            { label: "Com Áudio", value: withAudio, color: "text-purple-600" },
+                            { label: "Duração Média", value: avgDuration ? `${Math.floor(avgDuration / 60)}m ${avgDuration % 60}s` : "—", color: "text-gray-600" },
+                          ].map(s => (
+                            <div key={s.label} className="bg-gray-50 rounded-lg p-3 text-center">
+                              <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3">
+                          <div className="flex justify-between text-xs text-gray-400 mb-1">
+                            <span>Taxa de conclusão</span><span>{completionRate}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div className={`h-2 rounded-full transition-all ${completionRate >= 80 ? "bg-green-500" : completionRate >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+                              style={{ width: `${completionRate}%` }} />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="questions">
             {selectedSurvey === "todos" ? (
               <Card className="border-0 shadow-sm">
