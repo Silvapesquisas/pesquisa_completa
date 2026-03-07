@@ -45,27 +45,53 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
       {surveys.map(s => {
         const isDownloaded = offlineIds.has(s.id);
         const offlineInfo = offlineSurveys.find(o => o.id === s.id);
+        const myCount = myInterviewCounts?.[s.id] || 0;
+        const limit = s.max_interviews_per_interviewer;
+        const target = s.target_interviews;
+        const limitReached = limit && myCount >= limit;
+        const progressPct = limit ? Math.min((myCount / limit) * 100, 100) : null;
+
         return (
           <Card key={s.id}
-            className={`border-0 shadow-sm transition-shadow hover:shadow-md cursor-pointer ${isDownloaded ? "border-l-4 border-l-blue-400" : ""}`}
-            onClick={() => onSelect(s)}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-gray-900 text-sm">{s.title}</h3>
-                  {isDownloaded && (
-                    <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
-                      <CheckCircle2 className="w-3 h-3 mr-1" /> Offline
-                    </Badge>
+            className={`border-0 shadow-sm transition-shadow hover:shadow-md cursor-pointer ${isDownloaded ? "border-l-4 border-l-blue-400" : ""} ${limitReached ? "opacity-70" : ""}`}
+            onClick={() => !limitReached && onSelect(s)}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 text-sm">{s.title}</h3>
+                    {isDownloaded && (
+                      <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> Offline
+                      </Badge>
+                    )}
+                    {limitReached && (
+                      <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">Limite atingido</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 capitalize">
+                    {s.category} · {s.questions?.length || 0} questões
+                    {offlineInfo?._downloadedAt && (
+                      <span> · baixado {format(new Date(offlineInfo._downloadedAt), "dd/MM", { locale: ptBR })}</span>
+                    )}
+                  </p>
+                  {(limit || target) && (
+                    <div className="mt-2 space-y-1">
+                      {limit && (
+                        <div>
+                          <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
+                            <span className="flex items-center gap-0.5"><Target className="w-2.5 h-2.5" /> Meu progresso</span>
+                            <span className={`font-medium ${limitReached ? "text-orange-500" : "text-blue-600"}`}>{myCount}/{limit}</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full transition-all ${limitReached ? "bg-orange-400" : "bg-blue-400"}`}
+                              style={{ width: `${progressPct}%` }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 capitalize">
-                  {s.category} · {s.questions?.length || 0} questões
-                  {offlineInfo?._downloadedAt && (
-                    <span> · baixado {format(new Date(offlineInfo._downloadedAt), "dd/MM", { locale: ptBR })}</span>
-                  )}
-                </p>
-              </div>
               <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                 {isOnline && !isDownloaded && (
                   <Button size="sm" variant="outline" onClick={() => onDownload(s)} className="text-xs h-8">
