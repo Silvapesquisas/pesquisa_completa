@@ -158,6 +158,7 @@ export default function FieldApp() {
   const [autoSaveMsg, setAutoSaveMsg] = useState("");
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
+  const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
