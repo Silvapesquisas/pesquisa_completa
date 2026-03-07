@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut } from "lucide-react";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
 import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
@@ -12,9 +12,10 @@ import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 import QuestionIndex from "@/components/fieldapp/QuestionIndex";
 
+const FIELD_USER_KEY = "fieldapp_user";
+
 function QuestionField({ question, value, onChange }) {
   const type = question.type;
-
   if (type === "aberta") {
     return <Textarea value={value || ""} onChange={e => onChange(e.target.value)} placeholder="Sua resposta..." rows={3} className="text-base" />;
   }
@@ -74,13 +75,74 @@ function QuestionField({ question, value, onChange }) {
   return <Input value={value || ""} onChange={e => onChange(e.target.value)} placeholder="Resposta..." className="text-base" />;
 }
 
+// ── LOGIN BY CODE ──
+function CodeLogin({ onLogin }) {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = async () => {
+    if (code.length !== 8) { setError("O código deve ter 8 dígitos."); return; }
+    setLoading(true);
+    setError("");
+    const results = await base44.entities.FieldUser.filter({ access_code: code, active: true });
+    if (results.length === 0) {
+      setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
+      setLoading(false);
+      return;
+    }
+    const fieldUser = results[0];
+    // Persist in localStorage for offline access
+    localStorage.setItem(FIELD_USER_KEY, JSON.stringify(fieldUser));
+    onLogin(fieldUser);
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-700 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <KeyRound className="w-8 h-8 text-blue-600" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">App de Campo</h1>
+          <p className="text-sm text-gray-500 mt-1">Digite seu código de acesso</p>
+        </div>
+        <div className="space-y-3">
+          <Input
+            value={code}
+            onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            placeholder="00000000"
+            className="text-center text-2xl tracking-[0.5em] font-mono font-bold h-14"
+            maxLength={8}
+            inputMode="numeric"
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+          />
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+          <Button
+            className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-base"
+            onClick={handleLogin}
+            disabled={loading || code.length !== 8}
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar"}
+          </Button>
+        </div>
+        <p className="text-xs text-gray-400 text-center">
+          Não sabe seu código? Solicite ao seu supervisor ou gestor da pesquisa.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function FieldApp() {
-  const [user, setUser] = useState(null);
+  const [fieldUser, setFieldUser] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [onlineSurveys, setOnlineSurveys] = useState([]);
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [step, setStep] = useState("select"); // select | interview | review | done
+  const [step, setStep] = useState("select");
   const [location, setLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -103,18 +165,49 @@ export default function FieldApp() {
     offlineSurveys, downloadSurvey, removeSurveyOffline, totalStorageBytes,
   } = useOfflineSync();
 
-  // Merged survey list: offline-downloaded first, then online
+  // Try to restore session from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem(FIELD_USER_KEY);
+    if (stored) {
+      try {
+        setFieldUser(JSON.parse(stored));
+      } catch {}
+    }
+    setLoadingUser(false);
+  }, []);
+
+  // Load surveys when user is set and online
+  useEffect(() => {
+    if (!fieldUser) return;
+    if (isOnline) {
+      // Load surveys assigned to this field user (or all active if no assignment)
+      const assigned = fieldUser.assigned_survey_ids || [];
+      if (assigned.length > 0) {
+        Promise.all(assigned.map(id => base44.entities.Survey.filter({ id, status: "ativa" })))
+          .then(results => setOnlineSurveys(results.flat()))
+          .catch(() => {});
+      } else {
+        base44.entities.Survey.filter({ status: "ativa", company_id: fieldUser.company_id })
+          .then(setOnlineSurveys)
+          .catch(() => {});
+      }
+    }
+  }, [fieldUser, isOnline]);
+
   const allSurveys = [
     ...offlineSurveys,
     ...onlineSurveys.filter(s => !offlineSurveys.find(o => o.id === s.id)),
   ];
 
-  useEffect(() => {
-    base44.auth.me().then(u => setUser(u)).catch(() => {});
-    if (isOnline) {
-      base44.entities.Survey.filter({ status: "ativa" }).then(setOnlineSurveys).catch(() => {});
-    }
-  }, [isOnline]);
+  const handleLogin = (fu) => setFieldUser(fu);
+
+  const handleLogout = () => {
+    localStorage.removeItem(FIELD_USER_KEY);
+    setFieldUser(null);
+    setStep("select");
+    setSelectedSurvey(null);
+    setAnswers({});
+  };
 
   const getLocation = () => {
     setLocationLoading(true);
@@ -179,8 +272,9 @@ export default function FieldApp() {
     return {
       survey_id: selectedSurvey.id,
       survey_title: selectedSurvey.title,
-      interviewer_id: user?.id,
-      interviewer_name: user?.full_name || user?.email,
+      field_user_id: fieldUser?.id,
+      interviewer_name: fieldUser?.name || "Entrevistador",
+      company_id: fieldUser?.company_id,
       status: "concluida",
       answers: formattedAnswers,
       latitude: location?.lat || null,
@@ -218,7 +312,6 @@ export default function FieldApp() {
   const loadDraft = (draft) => {
     const survey = allSurveys.find(s => s.id === draft.survey_id);
     if (!survey) { alert("Pesquisa do rascunho não encontrada. Baixe-a para uso offline."); return; }
-    // Rebuild answers map from formatted answers
     const answersMap = {};
     (draft.answers || []).forEach(a => {
       answersMap[a.question_id] = a.answer_array?.length > 0 ? a.answer_array.join("|") : a.answer;
@@ -235,7 +328,6 @@ export default function FieldApp() {
     if (confirm("Excluir este rascunho?")) removeDraft(draftId);
   };
 
-  // Auto-save every 30 seconds during interview
   useEffect(() => {
     if (step !== "interview") {
       if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
@@ -258,6 +350,20 @@ export default function FieldApp() {
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
   };
+
+  // Loading state
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-blue-50">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  // Not logged in — show code login screen
+  if (!fieldUser) {
+    return <CodeLogin onLogin={handleLogin} />;
+  }
 
   // ── DONE ──
   if (step === "done") {
@@ -414,34 +520,41 @@ export default function FieldApp() {
         />
       )}
       <div className="p-5 space-y-5">
-      <div className="pt-6">
-        <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
-        <p className="text-gray-500 text-sm mt-1">Olá, {user?.full_name || user?.email || "entrevistador"}</p>
-      </div>
+        <div className="pt-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Olá, <span className="font-medium text-gray-700">{fieldUser.name}</span>
+              <Badge variant="outline" className="ml-2 text-xs capitalize">{fieldUser.role}</Badge>
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Sair
+          </button>
+        </div>
 
-      <SyncStatusBar
-        isOnline={isOnline} syncing={syncing} drafts={drafts}
-        lastSynced={lastSynced} onSync={syncDrafts}
-        syncLogs={syncLogs} onClearLogs={clearLogs}
-      />
-
-      <div id="drafts-section">
-        <DraftsList
-          drafts={drafts}
-          onEdit={loadDraft}
-          onDelete={deleteDraft}
+        <SyncStatusBar
+          isOnline={isOnline} syncing={syncing} drafts={drafts}
+          lastSynced={lastSynced} onSync={syncDrafts}
+          syncLogs={syncLogs} onClearLogs={clearLogs}
         />
-      </div>
 
-      <OfflineSurveys
-        surveys={allSurveys}
-        offlineSurveys={offlineSurveys}
-        onDownload={downloadSurvey}
-        onRemove={removeSurveyOffline}
-        totalStorageBytes={totalStorageBytes}
-        isOnline={isOnline}
-        onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}
-      />
+        <div id="drafts-section">
+          <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} />
+        </div>
+
+        <OfflineSurveys
+          surveys={allSurveys}
+          offlineSurveys={offlineSurveys}
+          onDownload={downloadSurvey}
+          onRemove={removeSurveyOffline}
+          totalStorageBytes={totalStorageBytes}
+          isOnline={isOnline}
+          onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setStep("interview"); }}
+        />
       </div>
     </div>
   );
