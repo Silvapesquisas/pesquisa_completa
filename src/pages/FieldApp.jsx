@@ -490,7 +490,7 @@ export default function FieldApp() {
   // ── INTERVIEW ──
   if (step === "interview" && currentQuestion) {
     const myCount = myInterviewCounts[selectedSurvey?.id] || 0;
-    const limit = selectedSurvey?.max_interviews_per_interviewer;
+    const limit = selectedSurvey ? getEffectiveLimit(selectedSurvey) : null;
     const limitReached = limit && myCount >= limit;
 
     return (
