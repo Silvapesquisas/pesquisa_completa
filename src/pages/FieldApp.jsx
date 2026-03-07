@@ -156,6 +156,7 @@ export default function FieldApp() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [autoSaveMsg, setAutoSaveMsg] = useState("");
   const [showTutorial, setShowTutorial] = useState(false);
+  const [loadingSurveys, setLoadingSurveys] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
