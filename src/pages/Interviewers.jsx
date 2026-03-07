@@ -371,19 +371,20 @@ export default function Interviewers() {
                     <div
                       key={s.id}
                       onClick={() => toggleSurveyAssign(s.id)}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
                         isChecked
-                          ? "bg-blue-100 border border-blue-300"
-                          : "bg-white border border-gray-200 hover:border-blue-200 hover:bg-blue-50"
+                          ? "bg-blue-600 border-2 border-blue-700 shadow-sm"
+                          : "bg-white border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50"
                       }`}
                     >
-                      <Checkbox
-                        id={`edit-${s.id}`}
-                        checked={isChecked}
-                        onCheckedChange={() => toggleSurveyAssign(s.id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                      <label htmlFor={`edit-${s.id}`} className={`text-sm cursor-pointer select-none ${isChecked ? "text-blue-800 font-medium" : "text-gray-700"}`}>
+                      <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
+                        isChecked
+                          ? "bg-white border-white"
+                          : "bg-white border-gray-400"
+                      }`}>
+                        {isChecked && <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                      </div>
+                      <label className={`text-sm cursor-pointer select-none font-medium ${isChecked ? "text-white" : "text-gray-700"}`}>
                         {s.title}
                       </label>
                     </div>
