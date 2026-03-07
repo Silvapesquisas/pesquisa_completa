@@ -638,8 +638,9 @@ export default function FieldApp() {
           loadingSurveys={loadingSurveys}
           onRefresh={() => loadSurveys(fieldUser)}
           myInterviewCounts={myInterviewCounts}
+          getEffectiveLimit={getEffectiveLimit}
           onSelect={(s) => {
-            const limit = s.max_interviews_per_interviewer;
+            const limit = getEffectiveLimit(s);
             const myCount = myInterviewCounts[s.id] || 0;
             if (limit && myCount >= limit) {
               alert(`Você atingiu o limite de ${limit} entrevistas para esta pesquisa.`);
