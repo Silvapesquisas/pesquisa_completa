@@ -630,7 +630,17 @@ export default function FieldApp() {
           isOnline={isOnline}
           loadingSurveys={loadingSurveys}
           onRefresh={() => loadSurveys(fieldUser)}
-          onSelect={(s) => { setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null); setStep("interview"); getLocation(true); }}
+          myInterviewCounts={myInterviewCounts}
+          onSelect={(s) => {
+            const limit = s.max_interviews_per_interviewer;
+            const myCount = myInterviewCounts[s.id] || 0;
+            if (limit && myCount >= limit) {
+              alert(`Você atingiu o limite de ${limit} entrevistas para esta pesquisa.`);
+              return;
+            }
+            setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null); setAudioUrl(null); setAudioDuration(0); setRecording(false);
+            setStep("interview"); getLocation(true);
+          }}
         />
       </div>
     </div>
