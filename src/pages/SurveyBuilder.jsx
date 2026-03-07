@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
+import QuestionBank from "@/components/surveys/QuestionBank";
 
 const QUESTION_TYPES = [
   { value: "aberta", label: "Resposta Aberta" },
