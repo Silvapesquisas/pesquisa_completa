@@ -219,6 +219,13 @@ export default function FieldApp() {
     ...onlineSurveys.filter(s => !offlineSurveys.find(o => o.id === s.id)),
   ];
 
+  // Retorna o limite efetivo: personalizado do entrevistador ou padrão da pesquisa
+  const getEffectiveLimit = (survey) => {
+    const personalLimit = fieldUser?.survey_interview_limits?.[survey.id];
+    if (personalLimit !== undefined && personalLimit !== null && personalLimit !== "") return Number(personalLimit);
+    return survey.max_interviews_per_interviewer || null;
+  };
+
   const handleLogin = (fu) => setFieldUser(fu);
 
   const handleLogout = () => {
