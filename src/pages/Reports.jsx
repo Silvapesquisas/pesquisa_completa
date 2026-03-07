@@ -195,6 +195,7 @@ Gere: resumo executivo, resultados por questão, padrões e conclusão.`;
         <Tabs defaultValue="charts" className="space-y-4">
           <TabsList>
             <TabsTrigger value="charts"><BarChart2 className="w-4 h-4 mr-1" /> Gráficos</TabsTrigger>
+            <TabsTrigger value="interviewers"><Users className="w-4 h-4 mr-1" /> Entrevistadores</TabsTrigger>
             <TabsTrigger value="questions"><PieChart className="w-4 h-4 mr-1" /> Por Questão</TabsTrigger>
           </TabsList>
 
