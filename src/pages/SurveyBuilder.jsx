@@ -140,6 +140,7 @@ export default function SurveyBuilder() {
     questions: [], target_interviews: "", start_date: "", end_date: ""
   });
   const [saving, setSaving] = useState(false);
+  const [showBank, setShowBank] = useState(false);
 
   useEffect(() => {
     if (editId) {
