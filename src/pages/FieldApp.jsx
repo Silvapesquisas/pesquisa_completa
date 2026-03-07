@@ -438,11 +438,23 @@ export default function FieldApp() {
           )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="font-semibold text-gray-700 text-sm">Áudio</h3>
-          {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : (
-            <Button variant="outline" size="sm" onClick={recording ? stopRecording : startRecording} className={`w-full ${recording ? "border-red-300 text-red-600" : ""}`}>
-              {recording ? <><MicOff className="w-4 h-4 mr-2" /> Parar Gravação</> : <><Mic className="w-4 h-4 mr-2" /> Gravar Áudio</>}
-            </Button>
+          <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2"><Mic className="w-4 h-4 text-purple-500" /> Áudio</h3>
+          {audioUrl ? (
+            <div className="space-y-2">
+              <audio controls src={audioUrl} className="w-full" />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={recording ? stopRecording : startRecording}>
+                  {recording ? <><MicOff className="w-3.5 h-3.5 mr-1" /> Parar</> : <><Mic className="w-3.5 h-3.5 mr-1" /> Regravar</>}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">Nenhum áudio gravado. Você pode gravar durante as questões ou aqui.</p>
+              <Button variant="outline" size="sm" onClick={recording ? stopRecording : startRecording} className={`w-full ${recording ? "border-red-300 text-red-600 animate-pulse" : ""}`}>
+                {recording ? <><MicOff className="w-4 h-4 mr-2" /> Parar Gravação</> : <><Mic className="w-4 h-4 mr-2" /> Gravar Áudio</>}
+              </Button>
+            </div>
           )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm">
