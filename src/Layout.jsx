@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2
+  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2, BarChart2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/notifications/NotificationBell";
