@@ -183,10 +183,16 @@ export default function SurveyBuilder() {
   const save = async () => {
     if (!survey.title.trim()) { alert("Informe o título da pesquisa."); return; }
     setSaving(true);
+    const payload = {
+      ...survey,
+      target_interviews: survey.target_interviews !== "" && survey.target_interviews != null
+        ? Number(survey.target_interviews)
+        : undefined,
+    };
     if (editId) {
-      await base44.entities.Survey.update(editId, survey);
+      await base44.entities.Survey.update(editId, payload);
     } else {
-      await base44.entities.Survey.create(survey);
+      await base44.entities.Survey.create(payload);
     }
     setSaving(false);
     navigate(createPageUrl("Surveys"));
