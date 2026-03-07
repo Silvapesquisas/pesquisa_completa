@@ -364,30 +364,53 @@ export default function Interviewers() {
               <Input value={editData.notes || ""} onChange={e => setEditData(p => ({ ...p, notes: e.target.value }))} placeholder="Notas internas..." />
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-2 block">Pesquisas Atribuídas</Label>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto border-2 border-blue-100 rounded-lg p-3 bg-gray-50">
+              <Label className="text-xs text-gray-500 mb-2 block">Pesquisas Atribuídas e Limites Personalizados</Label>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto border-2 border-blue-100 rounded-lg p-3 bg-gray-50">
                 {surveys.filter(s => s.status === "ativa").map(s => {
                   const isChecked = (editData.assigned_survey_ids || []).includes(s.id);
+                  const personalLimit = editData.survey_interview_limits?.[s.id] ?? "";
+                  const defaultLimit = s.max_interviews_per_interviewer;
                   return (
-                    <div
-                      key={s.id}
-                      onClick={() => toggleSurveyAssign(s.id)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                        isChecked
-                          ? "bg-blue-600 border-2 border-blue-700 shadow-sm"
-                          : "bg-white border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50"
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
-                        isChecked
-                          ? "bg-white border-white"
-                          : "bg-white border-gray-400"
-                      }`}>
-                        {isChecked && <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    <div key={s.id} className={`rounded-lg border-2 transition-all ${isChecked ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white"}`}>
+                      <div
+                        onClick={() => toggleSurveyAssign(s.id)}
+                        className="flex items-center gap-3 px-3 py-2 cursor-pointer"
+                      >
+                        <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${isChecked ? "bg-blue-600 border-blue-600" : "bg-white border-gray-400"}`}>
+                          {isChecked && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <span className={`text-sm font-medium flex-1 ${isChecked ? "text-blue-800" : "text-gray-700"}`}>{s.title}</span>
+                        {defaultLimit && <span className="text-xs text-gray-400">padrão: {defaultLimit}</span>}
                       </div>
-                      <label className={`text-sm cursor-pointer select-none font-medium ${isChecked ? "text-white" : "text-gray-700"}`}>
-                        {s.title}
-                      </label>
+                      {isChecked && (
+                        <div className="px-3 pb-2 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <label className="text-xs text-gray-500 shrink-0">Limite personalizado:</label>
+                          <Input
+                            type="number"
+                            min="1"
+                            placeholder={defaultLimit ? `${defaultLimit} (padrão)` : "Sem limite"}
+                            value={personalLimit}
+                            onChange={e => setEditData(prev => ({
+                              ...prev,
+                              survey_interview_limits: {
+                                ...prev.survey_interview_limits,
+                                [s.id]: e.target.value === "" ? "" : Number(e.target.value),
+                              }
+                            }))}
+                            className="h-7 text-xs w-32"
+                          />
+                          {personalLimit !== "" && (
+                            <button
+                              onClick={() => setEditData(prev => {
+                                const updated = { ...prev.survey_interview_limits };
+                                delete updated[s.id];
+                                return { ...prev, survey_interview_limits: updated };
+                              })}
+                              className="text-xs text-gray-400 hover:text-red-500"
+                            >Usar padrão</button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
