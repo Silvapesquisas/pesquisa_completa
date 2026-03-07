@@ -116,6 +116,7 @@ export default function Interviewers() {
       notes: u.notes || "",
       active: u.active !== false,
       assigned_survey_ids: u.assigned_survey_ids || [],
+      survey_interview_limits: u.survey_interview_limits || {},
     });
     setSelectedUser(u);
     setEditOpen(true);
