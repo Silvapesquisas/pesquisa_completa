@@ -244,11 +244,23 @@ export default function SurveyBuilder() {
       </Card>
 
       <div className="space-y-3">
+        {showBank && (
+          <QuestionBank
+            surveyCategory={survey.category}
+            onLoadQuestions={qs => setSurvey(s => ({ ...s, questions: [...s.questions, ...qs] }))}
+            onClose={() => setShowBank(false)}
+          />
+        )}
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-800">Questões <Badge variant="secondary">{survey.questions.length}</Badge></h2>
-          <Button size="sm" onClick={addQuestion} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-1" /> Adicionar Questão
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowBank(true)} className="border-blue-200 text-blue-600 hover:bg-blue-50">
+              <BookMarked className="w-4 h-4 mr-1" /> Banco de Questões
+            </Button>
+            <Button size="sm" onClick={addQuestion} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-1" /> Adicionar Questão
+            </Button>
+          </div>
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>
