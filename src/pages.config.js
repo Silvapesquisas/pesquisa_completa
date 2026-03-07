@@ -58,6 +58,7 @@ import Reports from './pages/Reports';
 import SurveyBuilder from './pages/SurveyBuilder';
 import Surveys from './pages/Surveys';
 import Users from './pages/Users';
+import AdvancedReports from './pages/AdvancedReports';
 import __Layout from './Layout.jsx';
 
 
@@ -73,6 +74,7 @@ export const PAGES = {
     "SurveyBuilder": SurveyBuilder,
     "Surveys": Surveys,
     "Users": Users,
+    "AdvancedReports": AdvancedReports,
 }
 
 export const pagesConfig = {
