@@ -218,6 +218,28 @@ export default function SurveyBuilder() {
             <Label className="text-xs text-gray-500 mb-1 block">Descrição</Label>
             <Textarea value={survey.description || ""} onChange={e => setSurvey(s => ({ ...s, description: e.target.value }))} placeholder="Descreva o objetivo da pesquisa..." rows={3} />
           </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Meta total de entrevistas</Label>
+              <Input
+                type="number"
+                min="0"
+                value={survey.target_interviews || ""}
+                onChange={e => setSurvey(s => ({ ...s, target_interviews: e.target.value }))}
+                placeholder="Ex: 200"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Limite por entrevistador</Label>
+              <Input
+                type="number"
+                min="0"
+                value={survey.max_interviews_per_interviewer || ""}
+                onChange={e => setSurvey(s => ({ ...s, max_interviews_per_interviewer: e.target.value }))}
+                placeholder="Ex: 20"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Categoria</Label>
