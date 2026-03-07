@@ -537,6 +537,7 @@ export default function FieldApp() {
         />
       )}
       <div className="p-5 space-y-5">
+        {showTutorial && <OnboardingTutorial onClose={() => setShowTutorial(false)} />}
         <div className="pt-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
@@ -545,12 +546,20 @@ export default function FieldApp() {
               <Badge variant="outline" className="ml-2 text-xs capitalize">{fieldUser.role}</Badge>
             </p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
-          >
-            <LogOut className="w-4 h-4" /> Sair
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowTutorial(true)}
+              className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors bg-blue-50 px-2.5 py-1.5 rounded-lg"
+            >
+              <BookOpen className="w-3.5 h-3.5" /> Tutorial
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Sair
+            </button>
+          </div>
         </div>
 
         <SyncStatusBar
