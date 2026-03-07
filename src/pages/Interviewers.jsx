@@ -364,17 +364,31 @@ export default function Interviewers() {
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-2 block">Pesquisas Atribuídas</Label>
-              <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
-                {surveys.filter(s => s.status === "ativa").map(s => (
-                  <div key={s.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`edit-${s.id}`}
-                      checked={(editData.assigned_survey_ids || []).includes(s.id)}
-                      onCheckedChange={() => toggleSurveyAssign(s.id)}
-                    />
-                    <label htmlFor={`edit-${s.id}`} className="text-sm text-gray-700 cursor-pointer">{s.title}</label>
-                  </div>
-                ))}
+              <div className="space-y-1.5 max-h-48 overflow-y-auto border-2 border-blue-100 rounded-lg p-3 bg-gray-50">
+                {surveys.filter(s => s.status === "ativa").map(s => {
+                  const isChecked = (editData.assigned_survey_ids || []).includes(s.id);
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => toggleSurveyAssign(s.id)}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                        isChecked
+                          ? "bg-blue-100 border border-blue-300"
+                          : "bg-white border border-gray-200 hover:border-blue-200 hover:bg-blue-50"
+                      }`}
+                    >
+                      <Checkbox
+                        id={`edit-${s.id}`}
+                        checked={isChecked}
+                        onCheckedChange={() => toggleSurveyAssign(s.id)}
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <label htmlFor={`edit-${s.id}`} className={`text-sm cursor-pointer select-none ${isChecked ? "text-blue-800 font-medium" : "text-gray-700"}`}>
+                        {s.title}
+                      </label>
+                    </div>
+                  );
+                })}
                 {surveys.filter(s => s.status === "ativa").length === 0 && (
                   <p className="text-xs text-gray-400">Nenhuma pesquisa ativa.</p>
                 )}
