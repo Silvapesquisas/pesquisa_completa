@@ -110,25 +110,27 @@ export default function Users() {
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Convidar Usuário</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Convidar Gestor / Admin</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div className="bg-blue-50 text-blue-700 text-xs px-3 py-2 rounded-lg">
+              Para cadastrar <strong>entrevistadores de campo</strong>, acesse a página <strong>Entrevistadores</strong> — eles acessam pelo App de Campo com um código de 8 dígitos, sem necessidade de e-mail.
+            </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>
-              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@exemplo.com" type="email" />
+              <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="gestor@empresa.com" type="email" />
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Perfil</Label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="entrevistador">Entrevistador</SelectItem>
                   <SelectItem value="supervisor">Supervisor</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={invite} disabled={inviting}>
-              <Mail className="w-4 h-4 mr-2" /> {inviting ? "Enviando convite..." : "Enviar Convite"}
+              <Mail className="w-4 h-4 mr-2" /> {inviting ? "Enviando convite..." : "Enviar Convite por E-mail"}
             </Button>
           </div>
         </DialogContent>
