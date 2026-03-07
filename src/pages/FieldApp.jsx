@@ -212,7 +212,7 @@ export default function FieldApp() {
   // Load surveys when user is set and online
   useEffect(() => {
     if (fieldUser && isOnline) loadSurveys(fieldUser);
-  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fieldUser, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allSurveys = [
     ...offlineSurveys,
