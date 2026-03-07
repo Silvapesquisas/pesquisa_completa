@@ -92,18 +92,18 @@ export default function OfflineSurveys({ surveys, offlineSurveys, onDownload, on
                     </div>
                   )}
                 </div>
-              <div className="flex gap-1 shrink-0 mt-1" onClick={e => e.stopPropagation()}>
-                {isOnline && !isDownloaded && (
-                  <Button size="sm" variant="outline" onClick={() => onDownload(s)} className="text-xs h-8">
-                    <Download className="w-3 h-3 mr-1" /> Baixar
-                  </Button>
-                )}
-                {isDownloaded && (
-                  <Button size="sm" variant="ghost" onClick={() => onRemove(s.id)} className="text-xs h-8 text-red-400 hover:text-red-600 hover:bg-red-50">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                )}
-              </div>
+                <div className="flex gap-1 shrink-0 mt-1" onClick={e => e.stopPropagation()}>
+                  {isOnline && !isDownloaded && (
+                    <Button size="sm" variant="outline" onClick={() => onDownload(s)} className="text-xs h-8">
+                      <Download className="w-3 h-3 mr-1" /> Baixar
+                    </Button>
+                  )}
+                  {isDownloaded && (
+                    <Button size="sm" variant="ghost" onClick={() => onRemove(s.id)} className="text-xs h-8 text-red-400 hover:text-red-600 hover:bg-red-50">
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
