@@ -179,44 +179,28 @@ export default function FieldApp() {
     setLoadingUser(false);
   }, []);
 
+  const loadSurveys = async (user) => {
+    if (!user || !isOnline) return;
+    setLoadingSurveys(true);
+    try {
+      // Refresh fieldUser to get latest assigned_survey_ids
+      const results = await base44.entities.FieldUser.filter({ access_code: user.access_code, active: true });
+      const freshUser = results.length > 0 ? results[0] : user;
+      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(freshUser));
+      setFieldUser(freshUser);
+
+      const allActive = await base44.entities.Survey.filter({ status: "ativa" });
+      const assigned = freshUser.assigned_survey_ids || [];
+      setOnlineSurveys(assigned.length > 0 ? allActive.filter(s => assigned.includes(s.id)) : allActive);
+    } catch (e) {
+      // silently fail
+    }
+    setLoadingSurveys(false);
+  };
+
   // Load surveys when user is set and online
   useEffect(() => {
-    if (!fieldUser || !isOnline) return;
-
-    // Always refresh fieldUser from server to get latest assigned_survey_ids
-    base44.entities.FieldUser.filter({ access_code: fieldUser.access_code, active: true })
-      .then(results => {
-        if (results.length === 0) return;
-        const freshUser = results[0];
-        // Update localStorage with fresh data
-        localStorage.setItem(FIELD_USER_KEY, JSON.stringify(freshUser));
-        setFieldUser(freshUser);
-
-        const assigned = freshUser.assigned_survey_ids || [];
-        if (assigned.length > 0) {
-          // Fetch all active surveys and filter by assigned IDs
-          base44.entities.Survey.filter({ status: "ativa" })
-            .then(all => setOnlineSurveys(all.filter(s => assigned.includes(s.id))))
-            .catch(() => {});
-        } else {
-          base44.entities.Survey.filter({ status: "ativa" })
-            .then(setOnlineSurveys)
-            .catch(() => {});
-        }
-      })
-      .catch(() => {
-        // Fallback: use cached fieldUser data
-        const assigned = fieldUser.assigned_survey_ids || [];
-        if (assigned.length > 0) {
-          base44.entities.Survey.filter({ status: "ativa" })
-            .then(all => setOnlineSurveys(all.filter(s => assigned.includes(s.id))))
-            .catch(() => {});
-        } else {
-          base44.entities.Survey.filter({ status: "ativa" })
-            .then(setOnlineSurveys)
-            .catch(() => {});
-        }
-      });
+    if (fieldUser && isOnline) loadSurveys(fieldUser);
   }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allSurveys = [
