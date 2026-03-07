@@ -193,7 +193,16 @@ export default function FieldApp() {
 
       const allActive = await base44.entities.Survey.filter({ status: "ativa" });
       const assigned = freshUser.assigned_survey_ids || [];
-      setOnlineSurveys(assigned.length > 0 ? allActive.filter(s => assigned.includes(s.id)) : allActive);
+      const surveys = assigned.length > 0 ? allActive.filter(s => assigned.includes(s.id)) : allActive;
+      setOnlineSurveys(surveys);
+
+      // Count completed interviews per survey for this interviewer
+      if (freshUser.id) {
+        const myInterviews = await base44.entities.Interview.filter({ field_user_id: freshUser.id, status: "concluida" });
+        const counts = {};
+        myInterviews.forEach(iv => { counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1; });
+        setMyInterviewCounts(counts);
+      }
     } catch (e) {
       // silently fail
     }
