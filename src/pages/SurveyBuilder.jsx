@@ -188,6 +188,9 @@ export default function SurveyBuilder() {
       target_interviews: survey.target_interviews !== "" && survey.target_interviews != null
         ? Number(survey.target_interviews)
         : undefined,
+      max_interviews_per_interviewer: survey.max_interviews_per_interviewer !== "" && survey.max_interviews_per_interviewer != null
+        ? Number(survey.max_interviews_per_interviewer)
+        : undefined,
     };
     if (editId) {
       await base44.entities.Survey.update(editId, payload);
