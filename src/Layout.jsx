@@ -14,7 +14,7 @@ const navItems = [
   { label: "Entrevistas", page: "Interviews", icon: FileText },
   { label: "Entrevistadores", page: "Interviewers", icon: UserSquare2 },
   { label: "Relatórios", page: "Reports", icon: Map },
-  { label: "Rel. Avançado", page: "AdvancedReports", icon: FileText },
+  { label: "Rel. Avançado", page: "AdvancedReports", icon: BarChart2 },
   { label: "Usuários", page: "Users", icon: Users },
   { label: "Empresas", page: "Companies", icon: Building2 },
 ];
