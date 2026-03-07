@@ -209,11 +209,15 @@ export default function FieldApp() {
     setAnswers({});
   };
 
-  const getLocation = () => {
+  const getLocation = (silent = false) => {
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       pos => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationLoading(false); },
-      () => { alert("Não foi possível obter localização."); setLocationLoading(false); }
+      () => {
+        setLocationLoading(false);
+        if (!silent) alert("Não foi possível obter localização. Verifique as permissões do navegador/dispositivo.");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
