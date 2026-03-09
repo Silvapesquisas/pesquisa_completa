@@ -56,7 +56,9 @@ export default function Interviewers() {
       companyId
         ? base44.entities.Survey.filter({ company_id: companyId })
         : base44.entities.Survey.list(),
-      base44.entities.Interview.list("-created_date", 200),
+      companyId
+        ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date", 200)
+        : base44.entities.Interview.list("-created_date", 200),
     ]);
     setFieldUsers(fu);
     setSurveys(sv);
