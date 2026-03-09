@@ -107,6 +107,67 @@ export default function Reports() {
     a.click();
   };
 
+  const exportPDF = async () => {
+    if (filtered.length === 0) { alert("Nenhuma entrevista nos filtros selecionados."); return; }
+    setGenerating(true);
+    const surveyObj = surveys.find(s => s.id === selectedSurvey);
+    const totalInterviews = filtered.length;
+    const interviewersList = [...new Set(filtered.map(i => i.interviewer_name).filter(Boolean))];
+    const withGeo = filtered.filter(i => i.latitude && i.longitude).length;
+    const withAudio = filtered.filter(i => i.audio_url).length;
+    const periodStart = dateFrom || (filtered.length > 0 ? format(new Date(filtered[filtered.length - 1].created_date || Date.now()), "dd/MM/yyyy", { locale: ptBR }) : "—");
+    const periodEnd = dateTo || (filtered.length > 0 ? format(new Date(filtered[0].completed_at || filtered[0].created_date || Date.now()), "dd/MM/yyyy", { locale: ptBR }) : "—");
+
+    const qStats = surveyObj?.questions?.map(q => {
+      const allAnswers = filtered.flatMap(i => (i.answers || []).filter(a => a.question_id === q.id));
+      const counts = {};
+      allAnswers.forEach(a => {
+        const vals = a.answer_array?.length ? a.answer_array : [a.answer];
+        vals.forEach(v => { if (v) counts[v] = (counts[v] || 0) + 1; });
+      });
+      return { question: q, counts, total: allAnswers.length };
+    }) || [];
+
+    const questionSummary = qStats.map((qs, i) => {
+      const entries = Object.entries(qs.counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      return `Q${i+1}: "${qs.question.text}" — ${qs.total} respostas. Distribuição: ${entries.map(([v, n]) => `${v}: ${n} (${qs.total > 0 ? ((n/qs.total)*100).toFixed(1) : 0}%)`).join("; ")}`;
+    }).join("\n");
+
+    const prompt = `Você é especialista em pesquisas de opinião pública. Escreva uma ANÁLISE QUALITATIVA E CONCLUSÕES para o seguinte relatório. Use linguagem formal e técnica. Escreva em português brasileiro. Seja objetivo e analítico.
+
+PESQUISA: ${surveyObj?.title || "Pesquisa"}
+PERÍODO: ${periodStart} a ${periodEnd}
+TOTAL DE ENTREVISTAS: ${totalInterviews}
+ENTREVISTADORES: ${interviewersList.join(", ") || "—"} (${interviewersList.length} total)
+COM GEOLOCALIZAÇÃO: ${withGeo} (${totalInterviews > 0 ? ((withGeo/totalInterviews)*100).toFixed(1) : 0}%)
+
+RESULTADOS POR QUESTÃO:
+${questionSummary || "Sem dados de questões."}
+
+Estruture sua resposta com estas seções:
+1. SÍNTESE DOS RESULTADOS
+2. ANÁLISE POR QUESTÃO (comente cada questão individualmente com os dados)
+3. PADRÕES IDENTIFICADOS
+4. CONCLUSÕES E RECOMENDAÇÕES`;
+
+    let aiText = "";
+    try {
+      aiText = await base44.integrations.Core.InvokeLLM({ prompt, model: "claude_sonnet_4_6" });
+    } catch {
+      aiText = "Análise qualitativa não disponível.";
+    }
+
+    await generatePDF({
+      surveyObj,
+      filtered,
+      questionStats: qStats,
+      aiText,
+      dateFrom: periodStart,
+      dateTo: periodEnd,
+    });
+    setGenerating(false);
+  };
+
   const exportTXT = async () => {
     setGenerating(true);
     const surveyObj = surveys.find(s => s.id === selectedSurvey);
