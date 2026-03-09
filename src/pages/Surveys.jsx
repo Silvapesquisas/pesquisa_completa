@@ -49,11 +49,13 @@ export default function Surveys() {
   };
 
   const duplicateSurvey = async (s) => {
+    const me = await base44.auth.me();
     const { id, created_date, updated_date, ...rest } = s;
     await base44.entities.Survey.create({
       ...rest,
       title: `${s.title} (Cópia)`,
       status: "rascunho",
+      company_id: me?.company_id || s.company_id,
       questions: (s.questions || []).map(q => ({ ...q, id: crypto.randomUUID() })),
     });
     load();
