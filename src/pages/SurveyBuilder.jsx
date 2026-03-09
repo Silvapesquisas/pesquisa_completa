@@ -183,8 +183,10 @@ export default function SurveyBuilder() {
   const save = async () => {
     if (!survey.title.trim()) { alert("Informe o título da pesquisa."); return; }
     setSaving(true);
+    const me = await base44.auth.me();
     const payload = {
       ...survey,
+      company_id: survey.company_id || me?.company_id || "",
       target_interviews: survey.target_interviews !== "" && survey.target_interviews != null
         ? Number(survey.target_interviews)
         : undefined,
