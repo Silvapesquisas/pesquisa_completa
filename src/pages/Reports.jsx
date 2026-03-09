@@ -24,10 +24,19 @@ export default function Reports() {
   const [preview, setPreview] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      base44.entities.Survey.list(),
-      base44.entities.Interview.list("-completed_at", 500),
-    ]).then(([sv, iv]) => { setSurveys(sv); setInterviews(iv); });
+    base44.auth.me().then(async (me) => {
+      const companyId = me?.company_id;
+      const [sv, iv] = await Promise.all([
+        companyId
+          ? base44.entities.Survey.filter({ company_id: companyId })
+          : base44.entities.Survey.list(),
+        companyId
+          ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at", 500)
+          : base44.entities.Interview.list("-completed_at", 500),
+      ]);
+      setSurveys(sv);
+      setInterviews(iv);
+    });
   }, []);
 
   const filtered = interviews.filter(i => {
