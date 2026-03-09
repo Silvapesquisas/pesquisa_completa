@@ -489,9 +489,12 @@ Use linguagem formal e técnica, similar a relatórios de pesquisa eleitoral e d
 
       {/* Export */}
       <div className="flex flex-wrap gap-3">
-        <Button className="bg-blue-600 hover:bg-blue-700" onClick={exportTXT} disabled={generating || filtered.length === 0}>
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={exportPDF} disabled={generating || filtered.length === 0}>
           {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-          Exportar Relatório AI (TXT)
+          {generating ? "Gerando PDF..." : "Exportar Relatório PDF (com IA)"}
+        </Button>
+        <Button variant="outline" onClick={exportTXT} disabled={generating || filtered.length === 0}>
+          <FileText className="w-4 h-4 mr-2" /> Exportar TXT
         </Button>
         <Button variant="outline" onClick={exportKML} disabled={filtered.filter(i => i.latitude).length === 0}>
           <Map className="w-4 h-4 mr-2" /> Exportar KML
