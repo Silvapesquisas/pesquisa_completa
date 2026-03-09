@@ -153,6 +153,7 @@ export default function Dashboard() {
       {/* AI Insights + Map + Performance */}
       <AIInsightsWidget interviews={interviews} />
       <InterviewMap interviews={interviews} surveys={surveys} />
+      <InterviewHeatmap interviews={interviews} />
       <InterviewerPerformance interviews={interviews} />
 
       {/* Offline surveys management */}
