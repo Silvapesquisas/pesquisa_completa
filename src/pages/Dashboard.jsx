@@ -11,6 +11,7 @@ import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import AIInsightsWidget from "@/components/dashboard/AIInsightsWidget";
 import InterviewMap from "@/components/dashboard/InterviewMap";
 import InterviewerPerformance from "@/components/dashboard/InterviewerPerformance";
+import InterviewHeatmap from "@/components/dashboard/InterviewHeatmap";
 
 export default function Dashboard() {
   const [surveys, setSurveys] = useState([]);
