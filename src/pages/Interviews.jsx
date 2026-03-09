@@ -25,14 +25,20 @@ export default function Interviews() {
 
   useEffect(() => {
     if (surveyIdParam) setFilterSurvey(surveyIdParam);
-    Promise.all([
-      base44.entities.Interview.list("-created_date"),
-      base44.entities.Survey.list(),
-    ]).then(([iv, sv]) => {
+    base44.auth.me().then(async (me) => {
+      const companyId = me?.company_id;
+      const [iv, sv] = await Promise.all([
+        companyId
+          ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date")
+          : base44.entities.Interview.list("-created_date"),
+        companyId
+          ? base44.entities.Survey.filter({ company_id: companyId })
+          : base44.entities.Survey.list(),
+      ]);
       setInterviews(iv);
       setSurveys(sv);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const filtered = interviews.filter(i => {
