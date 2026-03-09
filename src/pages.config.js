@@ -47,6 +47,7 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
+import AdvancedReports from './pages/AdvancedReports';
 import Companies from './pages/Companies';
 import Dashboard from './pages/Dashboard';
 import FieldApp from './pages/FieldApp';
@@ -58,11 +59,11 @@ import Reports from './pages/Reports';
 import SurveyBuilder from './pages/SurveyBuilder';
 import Surveys from './pages/Surveys';
 import Users from './pages/Users';
-import AdvancedReports from './pages/AdvancedReports';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "AdvancedReports": AdvancedReports,
     "Companies": Companies,
     "Dashboard": Dashboard,
     "FieldApp": FieldApp,
@@ -74,7 +75,6 @@ export const PAGES = {
     "SurveyBuilder": SurveyBuilder,
     "Surveys": Surveys,
     "Users": Users,
-    "AdvancedReports": AdvancedReports,
 }
 
 export const pagesConfig = {

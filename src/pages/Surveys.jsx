@@ -25,8 +25,14 @@ export default function Surveys() {
   const [versioningSurvey, setVersioningSurvey] = useState(null);
   const navigate = useNavigate();
 
-  const load = () => {
-    base44.entities.Survey.list("-created_date").then(data => { setSurveys(data); setLoading(false); });
+  const load = async () => {
+    const me = await base44.auth.me();
+    const companyId = me?.company_id;
+    const data = companyId
+      ? await base44.entities.Survey.filter({ company_id: companyId }, "-created_date")
+      : await base44.entities.Survey.list("-created_date");
+    setSurveys(data);
+    setLoading(false);
   };
   useEffect(load, []);
 
