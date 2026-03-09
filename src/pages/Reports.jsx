@@ -11,6 +11,7 @@ import { FileText, Download, Loader2, BarChart2, Map, PieChart, Users } from "lu
 import { format, isAfter, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChartCard, PieChartCard } from "@/components/reports/InterviewCharts";
+import { generatePDF } from "@/components/reports/pdfExport";
 
 export default function Reports() {
   const [surveys, setSurveys] = useState([]);
