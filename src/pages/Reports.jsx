@@ -110,12 +110,95 @@ export default function Reports() {
     setGenerating(true);
     const surveyObj = surveys.find(s => s.id === selectedSurvey);
     const surveyTitle = surveyObj?.title || "Todas as pesquisas";
-    const prompt = `Gere um relatório profissional sobre as entrevistas:
-Pesquisa: ${surveyTitle} | Total: ${filtered.length} | Período: ${dateFrom || "—"} a ${dateTo || "—"}
-Entrevistadores: ${[...new Set(filtered.map(i => i.interviewer_name))].join(", ") || "—"}
-Dados: ${filtered.slice(0, 15).map((i, idx) => `[${idx + 1}] ${i.interviewer_name} - ${(i.answers || []).map(a => `${a.question_text}: ${a.answer || a.answer_array?.join(", ") || "—"}`).join("; ")}`).join("\n")}
-Gere: resumo executivo, resultados por questão, padrões e conclusão.`;
-    const result = await base44.integrations.Core.InvokeLLM({ prompt });
+    const surveyDesc = surveyObj?.description || "";
+    const surveyCategory = surveyObj?.category || "";
+    const totalInterviews = filtered.length;
+    const interviewersList = [...new Set(filtered.map(i => i.interviewer_name).filter(Boolean))];
+    const withGeo = filtered.filter(i => i.latitude && i.longitude).length;
+    const withAudio = filtered.filter(i => i.audio_url).length;
+    const periodStart = dateFrom || (filtered.length > 0 ? format(new Date(filtered[filtered.length - 1].created_date || Date.now()), "dd/MM/yyyy", { locale: ptBR }) : "—");
+    const periodEnd = dateTo || (filtered.length > 0 ? format(new Date(filtered[0].completed_at || filtered[0].created_date || Date.now()), "dd/MM/yyyy", { locale: ptBR }) : "—");
+
+    // Build per-question stats
+    const questionStats = surveyObj?.questions?.map(q => {
+      const allAnswers = filtered.flatMap(i => (i.answers || []).filter(a => a.question_id === q.id));
+      const counts = {};
+      allAnswers.forEach(a => {
+        const vals = a.answer_array?.length ? a.answer_array : [a.answer];
+        vals.forEach(v => { if (v) counts[v] = (counts[v] || 0) + 1; });
+      });
+      const sortedCounts = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      return { question: q.text, type: q.type, total: allAnswers.length, counts: sortedCounts };
+    }) || [];
+
+    const questionSummary = questionStats.map((qs, i) =>
+      `Q${i+1}: "${qs.question}" (${qs.type}) — ${qs.total} respostas. Distribuição: ${qs.counts.slice(0, 8).map(([v, n]) => `${v}: ${n} (${totalInterviews > 0 ? ((n/qs.total)*100).toFixed(1) : 0}%)`).join("; ")}`
+    ).join("\n");
+
+    const sampleAnswers = filtered.slice(0, 20).map((i, idx) =>
+      `[${idx+1}] ${i.interviewer_name || "—"} | ${i.location_address || (i.latitude ? `${i.latitude?.toFixed(4)},${i.longitude?.toFixed(4)}` : "sem GPS")} | ${(i.answers || []).map(a => `${a.question_text}: ${a.answer || a.answer_array?.join(", ") || "—"}`).join("; ")}`
+    ).join("\n");
+
+    const prompt = `Você é um especialista em pesquisas de opinião pública e deve gerar um RELATÓRIO DESCRITIVO TÉCNICO COMPLETO, seguindo rigorosamente a estrutura abaixo. Use linguagem formal, técnica e analítica. Escreva em português brasileiro.
+
+===== DADOS DA PESQUISA =====
+Título: ${surveyTitle}
+Descrição: ${surveyDesc}
+Categoria: ${surveyCategory}
+Total de entrevistas: ${totalInterviews}
+Período de campo: ${periodStart} a ${periodEnd}
+Entrevistadores: ${interviewersList.join(", ") || "—"} (${interviewersList.length} no total)
+Entrevistas com geolocalização: ${withGeo} (${totalInterviews > 0 ? ((withGeo/totalInterviews)*100).toFixed(1) : 0}%)
+Entrevistas com áudio: ${withAudio} (${totalInterviews > 0 ? ((withAudio/totalInterviews)*100).toFixed(1) : 0}%)
+
+===== QUESTÕES E RESULTADOS =====
+${questionSummary || "Sem dados de questões disponíveis."}
+
+===== AMOSTRA DE RESPOSTAS =====
+${sampleAnswers || "Sem respostas disponíveis."}
+
+===== ESTRUTURA OBRIGATÓRIA DO RELATÓRIO =====
+
+Gere o relatório com EXATAMENTE estas seções, nesta ordem:
+
+1. CABEÇALHO
+   - Título formal do relatório
+   - Subtítulo descritivo (ex: "Relatório Descritivo contendo informações técnicas, representação gráfica e análise dos resultados")
+   - Nome da pesquisa, período de campo, total de entrevistas
+
+2. METODOLOGIA
+   - Tipo de pesquisa (quantitativa/qualitativa, Survey)
+   - Método de coleta (entrevistas presenciais, digitais etc.)
+   - Tamanho da amostra e justificativa
+   - Margem de erro (calcule com base em: n=${totalInterviews}, IC 95%)
+   - Intervalo de confiança
+   - Variáveis de controle utilizadas
+   - Instrumento de coleta (questionário estruturado digital)
+   - Período de trabalho de campo
+   - Processamento e análise dos dados
+
+3. ÁREAS DE INTERESSE E DISTRIBUIÇÃO DO TRABALHO DE CAMPO
+   - Distribuição territorial das entrevistas por entrevistador
+   - Cobertura geográfica (${withGeo} entrevistas com GPS de ${totalInterviews})
+   - Controle de qualidade: georreferenciamento, tempo médio de entrevista, verificação de cotas
+
+4. RESULTADOS DA PESQUISA
+   - Para CADA questão, escreva:
+     a) Enunciado da questão
+     b) Análise descritiva dos resultados (texto narrativo explicando os números)
+     c) Destaques e observações relevantes
+     d) Comparação entre grupos quando relevante
+   - Inclua os percentuais e números absolutos nas análises
+
+5. CONCLUSÕES E AVALIAÇÃO ESTRATÉGICA
+   - Síntese dos principais achados
+   - Padrões identificados entre as respostas
+   - Recomendações baseadas nos dados
+   - Observações finais sobre a qualidade da pesquisa
+
+Use linguagem formal e técnica, similar a relatórios de pesquisa eleitoral e de opinião pública. Seja detalhado e analítico em cada seção.`;
+
+    const result = await base44.integrations.Core.InvokeLLM({ prompt, model: "claude_sonnet_4_6" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([result], { type: "text/plain;charset=utf-8" }));
     a.download = `relatorio-${format(new Date(), "yyyyMMdd")}.txt`;
