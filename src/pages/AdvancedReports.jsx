@@ -127,14 +127,20 @@ export default function AdvancedReports() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      base44.entities.Survey.list(),
-      base44.entities.Interview.list("-completed_at", 1000),
-    ]).then(([sv, iv]) => {
+    base44.auth.me().then(async (me) => {
+      const companyId = me?.company_id;
+      const [sv, iv] = await Promise.all([
+        companyId
+          ? base44.entities.Survey.filter({ company_id: companyId })
+          : base44.entities.Survey.list(),
+        companyId
+          ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at", 1000)
+          : base44.entities.Interview.list("-completed_at", 1000),
+      ]);
       setSurveys(sv);
       setInterviews(iv);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const interviewers = useMemo(() =>
