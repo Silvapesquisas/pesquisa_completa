@@ -119,8 +119,13 @@
     @apply border-border outline-ring/50;
   }
 
+  html {
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior: none;
     /* Safe area insets for iOS notch/gesture bar */
     padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);

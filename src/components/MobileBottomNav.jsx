@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { LayoutDashboard, ClipboardList, FileText, UserSquare2, Map } from "lucide-react";
 
@@ -12,6 +12,22 @@ const tabs = [
 
 export default function MobileBottomNav() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleTabPress = (tab) => {
+    const rootPath = tab.page === "Dashboard" ? "/" : createPageUrl(tab.page);
+    const active =
+      tab.page === "Dashboard"
+        ? location.pathname === "/"
+        : location.pathname.startsWith(`/${tab.page}`);
+
+    if (active) {
+      // Already on this tab — reset to section root
+      navigate(rootPath, { replace: true });
+    } else {
+      navigate(rootPath);
+    }
+  };
 
   return (
     <nav
@@ -20,18 +36,17 @@ export default function MobileBottomNav() {
       role="tablist"
     >
       {tabs.map((tab) => {
-        const href = tab.page === "Dashboard" ? "/" : `/${tab.page}`;
         const active =
           tab.page === "Dashboard"
             ? location.pathname === "/"
             : location.pathname.startsWith(`/${tab.page}`);
 
         return (
-          <Link
+          <button
             key={tab.page}
-            to={tab.page === "Dashboard" ? "/" : createPageUrl(tab.page)}
             role="tab"
             aria-selected={active}
+            onClick={() => handleTabPress(tab)}
             className={`
               flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px]
               select-none touch-manipulation transition-colors
@@ -43,7 +58,7 @@ export default function MobileBottomNav() {
           >
             <tab.icon className="w-5 h-5" />
             <span className="text-[10px] font-medium leading-tight">{tab.label}</span>
-          </Link>
+          </button>
         );
       })}
     </nav>

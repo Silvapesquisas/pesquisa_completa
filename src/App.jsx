@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import PageNotFound from './lib/PageNotFound';
 import Settings from './pages/Settings';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -16,8 +17,34 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
+const pageVariants = {
+  initial: { x: "100%", opacity: 0 },
+  animate: { x: 0, opacity: 1 },
+  exit: { x: "-30%", opacity: 0 },
+};
+
+const pageTransition = {
+  type: "tween",
+  ease: [0.25, 0.46, 0.45, 0.94],
+  duration: 0.28,
+};
+
+const AnimatedRoute = ({ children }) => (
+  <motion.div
+    variants={pageVariants}
+    initial="initial"
+    animate="animate"
+    exit="exit"
+    transition={pageTransition}
+    style={{ position: "absolute", width: "100%", minHeight: "100%" }}
+  >
+    {children}
+  </motion.div>
+);
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const location = useLocation();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -41,30 +68,40 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
-          }
-        />
-      ))}
-      <Route path="/Settings" element={
-        <LayoutWrapper currentPageName="Settings">
-          <Settings />
-        </LayoutWrapper>
-      } />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <div style={{ position: "relative", overflow: "hidden" }}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={
+            <AnimatedRoute>
+              <LayoutWrapper currentPageName={mainPageKey}>
+                <MainPage />
+              </LayoutWrapper>
+            </AnimatedRoute>
+          } />
+          {Object.entries(Pages).map(([path, Page]) => (
+            <Route
+              key={path}
+              path={`/${path}`}
+              element={
+                <AnimatedRoute>
+                  <LayoutWrapper currentPageName={path}>
+                    <Page />
+                  </LayoutWrapper>
+                </AnimatedRoute>
+              }
+            />
+          ))}
+          <Route path="/Settings" element={
+            <AnimatedRoute>
+              <LayoutWrapper currentPageName="Settings">
+                <Settings />
+              </LayoutWrapper>
+            </AnimatedRoute>
+          } />
+          <Route path="*" element={<PageNotFound />} />
+        </Routes>
+      </AnimatePresence>
+    </div>
   );
 };
 

@@ -156,7 +156,7 @@ export default function Layout({ children, currentPageName }) {
       </div>
 
       {/* Main content — offset for mobile top bar and bottom nav */}
-      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen bottom-nav-offset lg:pb-0">
+      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
         {children}
       </main>
 
