@@ -108,7 +108,17 @@ export function useOfflineSync() {
   // Auto-sync on reconnect
   useEffect(() => {
     if (isOnline && drafts.length > 0) { syncDrafts(); }
-  }, [isOnline]);
+  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Periodic auto-sync every 2 minutes when online and has pending drafts
+  useEffect(() => {
+    if (!isOnline) return;
+    const interval = setInterval(() => {
+      const current = loadJSON(DRAFTS_KEY, []);
+      if (current.length > 0) syncDrafts();
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isOnline, syncDrafts]);
 
   // Offline surveys management
   const downloadSurvey = useCallback((survey) => {

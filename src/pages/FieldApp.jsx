@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, RefreshCw, Target } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, RefreshCw, Target, BarChart2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import FieldNotifications from "@/components/fieldapp/FieldNotifications";
 import { useOfflineSync } from "@/components/fieldapp/useOfflineSync";
 import SyncStatusBar from "@/components/fieldapp/SyncStatusBar";
@@ -603,6 +605,12 @@ export default function FieldApp() {
           </div>
           <div className="flex items-center gap-2">
             <FieldNotifications fieldUser={fieldUser} />
+            <Link
+              to={createPageUrl("InterviewerDashboard")}
+              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors bg-indigo-50 px-2.5 py-1.5 rounded-lg"
+            >
+              <BarChart2 className="w-3.5 h-3.5" /> Meu Painel
+            </Link>
             <button
               onClick={() => setShowTutorial(true)}
               className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors bg-blue-50 px-2.5 py-1.5 rounded-lg"

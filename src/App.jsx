@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-route
 import { AnimatePresence, motion } from 'framer-motion';
 import PageNotFound from './lib/PageNotFound';
 import Settings from './pages/Settings';
+import InterviewerDashboard from './pages/InterviewerDashboard';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
@@ -96,6 +97,11 @@ const AuthenticatedApp = () => {
               <LayoutWrapper currentPageName="Settings">
                 <Settings />
               </LayoutWrapper>
+            </AnimatedRoute>
+          } />
+          <Route path="/InterviewerDashboard" element={
+            <AnimatedRoute>
+              <InterviewerDashboard />
             </AnimatedRoute>
           } />
           <Route path="*" element={<PageNotFound />} />
