@@ -18,10 +18,20 @@ export default function Users() {
   const [inviteRole, setInviteRole] = useState("entrevistador");
   const [inviting, setInviting] = useState(false);
 
-  const load = () => {
-    base44.entities.User.list().then(u => { setUsers(u); setLoading(false); });
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const load = async () => {
+    const me = await base44.auth.me();
+    setCurrentUser(me);
+    const companyId = me?.company_id;
+    // Super-admins (no company_id) see all users; others see only their company
+    const list = companyId
+      ? await base44.entities.User.filter({ company_id: companyId })
+      : await base44.entities.User.list();
+    setUsers(list);
+    setLoading(false);
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const toggleActive = async (u) => {
     await base44.entities.User.update(u.id, { active: !u.active });
@@ -37,6 +47,14 @@ export default function Users() {
     if (!inviteEmail) return;
     setInviting(true);
     await base44.users.inviteUser(inviteEmail, inviteRole === "admin" ? "admin" : "user");
+    // After invite, tag the new user with company_id if known
+    if (currentUser?.company_id) {
+      // Best-effort: find newly created user and stamp company_id
+      setTimeout(async () => {
+        const all = await base44.entities.User.filter({ email: inviteEmail });
+        if (all[0]) await base44.entities.User.update(all[0].id, { company_id: currentUser.company_id });
+      }, 2000);
+    }
     setInviting(false);
     setInviteOpen(false);
     setInviteEmail("");

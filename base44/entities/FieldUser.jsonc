@@ -1,0 +1,58 @@
+{
+  "name": "FieldUser",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome completo do entrevistador/supervisor"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "entrevistador",
+        "supervisor"
+      ],
+      "default": "entrevistador"
+    },
+    "access_code": {
+      "type": "string",
+      "description": "C\u00f3digo de 8 d\u00edgitos para acesso ao App de Campo"
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID da empresa"
+    },
+    "company_name": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "region": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "assigned_survey_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs das pesquisas atribu\u00eddas"
+    },
+    "survey_interview_limits": {
+      "type": "object",
+      "description": "Limite personalizado de entrevistas por pesquisa. Chave: survey_id, Valor: n\u00famero m\u00e1ximo"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "company_id",
+    "access_code"
+  ]
+}

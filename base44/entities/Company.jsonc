@@ -1,0 +1,46 @@
+{
+  "name": "Company",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome da empresa"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "E-mail do gestor principal"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "basico",
+        "profissional",
+        "enterprise"
+      ],
+      "default": "basico",
+      "description": "Plano contratado"
+    },
+    "max_interviewers": {
+      "type": "number",
+      "default": 5,
+      "description": "Limite de entrevistadores"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "cnpj": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "owner_email"
+  ]
+}

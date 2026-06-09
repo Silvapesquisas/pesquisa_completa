@@ -71,6 +71,11 @@ export default function Companies() {
 
   const getUserCount = (co) => users.filter(u => u.company_id === co.id).length;
 
+  const assignUserToCompany = async (userId, companyId) => {
+    await base44.entities.User.update(userId, { company_id: companyId });
+    load();
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -121,12 +126,33 @@ export default function Companies() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-4 text-xs text-gray-500">
+                <div className="flex gap-4 text-xs text-gray-500 mb-2">
                   <span className="flex items-center gap-1"><Users className="w-3 h-3" />{getUserCount(co)} usuários</span>
                   <span className="flex items-center gap-1"><Shield className="w-3 h-3" />Limite: {co.max_interviewers} entrevistadores</span>
                 </div>
-                {co.phone && <p className="text-xs text-gray-400 mt-1">Tel: {co.phone}</p>}
+                {co.phone && <p className="text-xs text-gray-400">Tel: {co.phone}</p>}
                 {co.cnpj && <p className="text-xs text-gray-400">CNPJ: {co.cnpj}</p>}
+                {/* Unlinked users — only shown to super-admin */}
+                {isAdmin && (() => {
+                  const unlinked = users.filter(u => !u.company_id);
+                  if (unlinked.length === 0) return null;
+                  return (
+                    <div className="mt-3 pt-3 border-t border-dashed border-gray-200">
+                      <p className="text-xs text-gray-400 mb-1.5">Usuários sem empresa:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unlinked.map(u => (
+                          <button key={u.id}
+                            onClick={() => assignUserToCompany(u.id, co.id)}
+                            className="text-xs bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-500 px-2 py-0.5 rounded-full transition-colors"
+                            title={`Vincular ${u.full_name || u.email} a ${co.name}`}
+                          >
+                            + {u.full_name || u.email}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}

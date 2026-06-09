@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import NoCompanyWarning from "@/components/NoCompanyWarning";
 
 const navItems = [
   { label: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +29,7 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   const isFieldApp = currentPageName === "FieldApp";
+  const isCompaniesPage = currentPageName === "Companies";
 
   if (isFieldApp) {
     return (
@@ -37,8 +39,22 @@ export default function Layout({ children, currentPageName }) {
     );
   }
 
+  // Non-super-admin users without a company see a blocking warning
+  const needsCompany = user && !user.company_id && user.role !== "admin" && !isCompaniesPage;
+  if (needsCompany) {
+    return <NoCompanyWarning />;
+  }
+
+  // Admin without company = super-admin, can access Companies page to fix this
+  const isUnlinkedAdmin = user && !user.company_id && user.role === "admin";
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {isUnlinkedAdmin && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-xs text-center px-4 py-1.5 font-medium">
+          ⚠️ Você é super-admin sem empresa vinculada. Acesse <strong>Empresas</strong> para criar e vincular empresas.
+        </div>
+      )}
       <style>{`
         :root {
           --primary: 37 99 235;
@@ -54,7 +70,7 @@ export default function Layout({ children, currentPageName }) {
               <Map className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-gray-900">FieldSurvey</h1>
+              <h1 className="text-sm font-bold text-gray-900">Entrevista Pro</h1>
               <p className="text-xs text-gray-400">Pesquisas de Campo</p>
             </div>
           </div>
@@ -101,7 +117,7 @@ export default function Layout({ children, currentPageName }) {
           <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
           <aside className="relative w-64 bg-white h-full shadow-xl flex flex-col">
             <div className="p-4 flex items-center justify-between border-b">
-              <span className="font-bold text-gray-900">FieldSurvey</span>
+              <span className="font-bold text-gray-900">Entrevista Pro</span>
               <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(false)}><X className="w-4 h-4" /></Button>
             </div>
             <nav className="flex-1 p-3 space-y-1">
@@ -130,7 +146,7 @@ export default function Layout({ children, currentPageName }) {
       {/* Mobile top bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></Button>
-        <span className="font-bold text-gray-900 text-sm flex-1">FieldSurvey</span>
+        <span className="font-bold text-gray-900 text-sm flex-1">Entrevista Pro</span>
         <NotificationBell user={user} />
       </div>
 

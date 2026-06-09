@@ -1,0 +1,46 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "E-mail do destinat\u00e1rio"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "interview_completed",
+        "draft_synced",
+        "sync_failed",
+        "survey_assigned",
+        "interviewer_added",
+        "system"
+      ],
+      "default": "system"
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false
+    },
+    "link_page": {
+      "type": "string"
+    },
+    "link_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email",
+    "title",
+    "message"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "supervisor",
+        "entrevistador"
+      ],
+      "default": "entrevistador"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID da empresa \u00e0 qual o usu\u00e1rio pertence"
+    },
+    "region": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "assigned_survey_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs das pesquisas atribu\u00eddas"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": []
+}

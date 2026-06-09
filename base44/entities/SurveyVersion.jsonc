@@ -1,0 +1,29 @@
+{
+  "name": "SurveyVersion",
+  "type": "object",
+  "properties": {
+    "survey_id": {
+      "type": "string"
+    },
+    "version_number": {
+      "type": "number"
+    },
+    "title": {
+      "type": "string"
+    },
+    "snapshot": {
+      "type": "object",
+      "description": "Full survey snapshot at this version"
+    },
+    "created_by_name": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "survey_id",
+    "snapshot"
+  ]
+}

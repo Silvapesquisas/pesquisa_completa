@@ -25,14 +25,13 @@ export default function Dashboard() {
   useEffect(() => {
     base44.auth.me().then(async (me) => {
       const companyId = me?.company_id;
+      const surveyFilter = companyId ? { company_id: companyId } : {};
       const [s, i, u] = await Promise.all([
+        base44.entities.Survey.filter({ ...surveyFilter }, "-created_date", 50),
+        base44.entities.Interview.filter({ ...surveyFilter }, "-created_date", 50),
         companyId
-          ? base44.entities.Survey.filter({ company_id: companyId }, "-created_date", 50)
-          : base44.entities.Survey.list("-created_date", 50),
-        companyId
-          ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date", 50)
-          : base44.entities.Interview.list("-created_date", 50),
-        base44.entities.User.list(),
+          ? base44.entities.User.filter({ company_id: companyId })
+          : base44.entities.User.list(),
       ]);
       setSurveys(s);
       setInterviews(i);

@@ -1,0 +1,112 @@
+{
+  "name": "Interview",
+  "type": "object",
+  "properties": {
+    "survey_id": {
+      "type": "string",
+      "description": "ID da pesquisa"
+    },
+    "survey_title": {
+      "type": "string"
+    },
+    "interviewer_id": {
+      "type": "string"
+    },
+    "field_user_id": {
+      "type": "string",
+      "description": "ID do FieldUser (entrevistador de campo)"
+    },
+    "interviewer_name": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID da empresa"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "em_andamento",
+        "concluida",
+        "revisao"
+      ],
+      "default": "em_andamento"
+    },
+    "answers": {
+      "type": "array",
+      "description": "Respostas da entrevista",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "question_text": {
+            "type": "string"
+          },
+          "question_type": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "answer_array": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "location_address": {
+      "type": "string"
+    },
+    "audio_url": {
+      "type": "string",
+      "description": "URL do \u00e1udio gravado"
+    },
+    "audio_duration": {
+      "type": "number",
+      "description": "Dura\u00e7\u00e3o do \u00e1udio em segundos"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es do entrevistador"
+    },
+    "edit_history": {
+      "type": "array",
+      "description": "Hist\u00f3rico de edi\u00e7\u00f5es",
+      "items": {
+        "type": "object",
+        "properties": {
+          "edited_at": {
+            "type": "string"
+          },
+          "edited_by": {
+            "type": "string"
+          },
+          "edited_by_name": {
+            "type": "string"
+          },
+          "changes_summary": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "survey_id"
+  ]
+}
