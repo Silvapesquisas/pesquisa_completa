@@ -12,6 +12,8 @@ import AIInsightsWidget from "@/components/dashboard/AIInsightsWidget";
 import InterviewMap from "@/components/dashboard/InterviewMap";
 import InterviewerPerformance from "@/components/dashboard/InterviewerPerformance";
 import InterviewHeatmap from "@/components/dashboard/InterviewHeatmap";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import PullToRefreshIndicator from "@/components/ui/PullToRefreshIndicator";
 
 export default function Dashboard() {
   const [surveys, setSurveys] = useState([]);
@@ -22,23 +24,28 @@ export default function Dashboard() {
 
   const { drafts, offlineSurveys, downloadSurvey, removeSurveyOffline, isOnline } = useOfflineSync();
 
+  const loadData = async () => {
+    const me = await base44.auth.me();
+    const companyId = me?.company_id;
+    const surveyFilter = companyId ? { company_id: companyId } : {};
+    const [s, i, u] = await Promise.all([
+      base44.entities.Survey.filter({ ...surveyFilter }, "-created_date", 50),
+      base44.entities.Interview.filter({ ...surveyFilter }, "-created_date", 50),
+      companyId
+        ? base44.entities.User.filter({ company_id: companyId })
+        : base44.entities.User.list(),
+    ]);
+    setSurveys(s);
+    setInterviews(i);
+    setUsers(u);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    base44.auth.me().then(async (me) => {
-      const companyId = me?.company_id;
-      const surveyFilter = companyId ? { company_id: companyId } : {};
-      const [s, i, u] = await Promise.all([
-        base44.entities.Survey.filter({ ...surveyFilter }, "-created_date", 50),
-        base44.entities.Interview.filter({ ...surveyFilter }, "-created_date", 50),
-        companyId
-          ? base44.entities.User.filter({ company_id: companyId })
-          : base44.entities.User.list(),
-      ]);
-      setSurveys(s);
-      setInterviews(i);
-      setUsers(u);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    loadData().catch(() => setLoading(false));
   }, []);
+
+  const { pullDistance, isRefreshing } = usePullToRefresh(loadData);
 
   const offlineIds = new Set(offlineSurveys.map(s => s.id));
   const activeSurveysList = surveys.filter(s => s.status === "ativa");
@@ -59,6 +66,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       {!bannerDismissed && (
         <SyncErrorBanner
           drafts={drafts}

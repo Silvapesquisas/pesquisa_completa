@@ -3,8 +3,9 @@ import { base44 } from "@/api/base44Client";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2, BarChart2
+  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2, BarChart2, Settings
 } from "lucide-react";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import NoCompanyWarning from "@/components/NoCompanyWarning";
@@ -18,6 +19,7 @@ const navItems = [
   { label: "Rel. Avançado", page: "AdvancedReports", icon: BarChart2 },
   { label: "Usuários", page: "Users", icon: Users },
   { label: "Empresas", page: "Companies", icon: Building2 },
+  { label: "Configurações", page: "Settings", icon: Settings },
 ];
 
 export default function Layout({ children, currentPageName }) {
@@ -144,16 +146,22 @@ export default function Layout({ children, currentPageName }) {
       )}
 
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
+      <div
+        className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 flex items-center gap-3"
+        style={{ paddingTop: `calc(env(safe-area-inset-top) + 12px)`, paddingBottom: "12px" }}
+      >
         <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></Button>
-        <span className="font-bold text-gray-900 text-sm flex-1">Entrevista Pro</span>
+        <span className="font-bold text-gray-900 dark:text-gray-100 text-sm flex-1">Entrevista Pro</span>
         <NotificationBell user={user} />
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen">
+      {/* Main content — offset for mobile top bar and bottom nav */}
+      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen bottom-nav-offset lg:pb-0">
         {children}
       </main>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav />
     </div>
   );
 }

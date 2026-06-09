@@ -39,43 +39,80 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  /* System dark mode via media query */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --background: 0 0% 8%;
+      --foreground: 0 0% 95%;
+      --card: 0 0% 11%;
+      --card-foreground: 0 0% 95%;
+      --popover: 0 0% 11%;
+      --popover-foreground: 0 0% 95%;
+      --primary: 217 91% 60%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 0 0% 16%;
+      --secondary-foreground: 0 0% 90%;
+      --muted: 0 0% 16%;
+      --muted-foreground: 0 0% 60%;
+      --accent: 0 0% 16%;
+      --accent-foreground: 0 0% 90%;
+      --destructive: 0 72% 51%;
+      --destructive-foreground: 0 0% 98%;
+      --border: 0 0% 20%;
+      --input: 0 0% 20%;
+      --ring: 217 91% 60%;
+      --chart-1: 220 70% 50%;
+      --chart-2: 160 60% 45%;
+      --chart-3: 30 80% 55%;
+      --chart-4: 280 65% 60%;
+      --chart-5: 340 75% 55%;
+      --sidebar-background: 0 0% 9%;
+      --sidebar-foreground: 240 4.8% 90%;
+      --sidebar-primary: 224.3 76.3% 60%;
+      --sidebar-primary-foreground: 0 0% 100%;
+      --sidebar-accent: 240 3.7% 18%;
+      --sidebar-accent-foreground: 240 4.8% 90%;
+      --sidebar-border: 240 3.7% 18%;
+      --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+  }
+
+  /* Explicit .dark class support (for manual toggle) */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 217 91% 60%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 240 4.8% 90%;
+    --sidebar-primary: 224.3 76.3% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-accent: 240 3.7% 18%;
+    --sidebar-accent-foreground: 240 4.8% 90%;
+    --sidebar-border: 240 3.7% 18%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
-
-
 
 @layer base {
   * {
@@ -84,5 +121,40 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Safe area insets for iOS notch/gesture bar */
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Disable text selection on interactive / decorative UI elements */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  nav,
+  .select-none-ui {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Keep text selection for actual content */
+  p, span, h1, h2, h3, h4, h5, h6, li, td, th, label, input, textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+@layer utilities {
+  /* Safe area bottom padding helper */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+  /* Bottom nav height + safe area */
+  .bottom-nav-offset {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
 }
