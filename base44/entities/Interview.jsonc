@@ -67,7 +67,7 @@
     },
     "location_accuracy": {
       "type": "number",
-      "description": "Precisão do GPS em metros no momento da captura"
+      "description": "Precis\u00e3o do GPS em metros no momento da captura"
     },
     "location_address": {
       "type": "string"
@@ -113,37 +113,80 @@
   "required": [
     "survey_id"
   ],
-  // Isolamento multi-tenant: entrevistas visíveis/editáveis apenas pela própria empresa.
-  // O App de Campo (anônimo) cria entrevistas via função backend "fieldSubmitInterview",
-  // que valida o access_code e força company_id/field_user_id no servidor.
   "rls": {
     "create": {
       "$or": [
-        { "company_id": "{{user.company_id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "role": "admin"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "role": "supervisor"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "read": {
       "$or": [
-        { "company_id": "{{user.company_id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "company_id": "{{user.company_id}}"
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "update": {
       "$or": [
-        { "company_id": "{{user.company_id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "company_id": "{{user.company_id}}"
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "delete": {
       "$or": [
         {
           "$and": [
-            { "company_id": "{{user.company_id}}" },
-            { "user_condition": { "role": "admin" } }
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            }
           ]
         },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     }
   }

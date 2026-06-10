@@ -43,22 +43,54 @@
     "title",
     "message"
   ],
-  // Notificações: cada usuário lê/atualiza apenas as próprias (por e-mail).
-  // Criação restrita à própria empresa (notificar colegas) ou super-admin.
   "rls": {
     "create": {
       "$or": [
-        { "company_id": "{{user.company_id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "role": "admin"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "role": "supervisor"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "read": {
       "$or": [
-        { "user_email": "{{user.email}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
-    "update": { "user_email": "{{user.email}}" },
-    "delete": { "user_email": "{{user.email}}" }
+    "update": {
+      "user_email": "{{user.email}}"
+    },
+    "delete": {
+      "user_email": "{{user.email}}"
+    }
   }
 }

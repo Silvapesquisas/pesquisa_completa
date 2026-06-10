@@ -1,7 +1,16 @@
 {
-  "name": "User",
   "type": "object",
+  "name": "User",
+  "title": "User",
   "properties": {
+    "email": {
+      "type": "string",
+      "description": "The email of the user"
+    },
+    "full_name": {
+      "type": "string",
+      "description": "The full name of the user"
+    },
     "role": {
       "type": "string",
       "enum": [
@@ -17,20 +26,25 @@
     },
     "company_id": {
       "type": "string",
-      "description": "ID da empresa à qual o usuário pertence",
-      // Apenas super-admin pode mover usuários entre empresas (evita escalada
-      // de acesso: um admin de empresa não pode se auto-vincular a outra empresa)
+      "description": "ID da empresa \u00e0 qual o usu\u00e1rio pertence",
       "rls": {
-        "write": { "user_condition": { "is_super_admin": true } }
+        "write": {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       }
     },
     "is_super_admin": {
       "type": "boolean",
       "default": false,
       "description": "Super-admin da plataforma: acesso global a todas as empresas. Conceda apenas pelo painel de dados do Base44.",
-      // Ninguém promove a si mesmo: só quem já é super-admin pode conceder
       "rls": {
-        "write": { "user_condition": { "is_super_admin": true } }
+        "write": {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       }
     },
     "region": {
@@ -44,40 +58,88 @@
       "items": {
         "type": "string"
       },
-      "description": "IDs das pesquisas atribuídas"
+      "description": "IDs das pesquisas atribu\u00eddas"
     },
     "notes": {
       "type": "string"
     }
   },
-  "required": [],
-  // Usuários do painel: visíveis apenas dentro da própria empresa
-  // (super-admin vê todos, inclusive os ainda não vinculados).
-  // Convites de novos usuários passam pela plataforma, não por create direto.
+  "required": [
+    "email",
+    "full_name"
+  ],
   "rls": {
-    "create": { "user_condition": { "is_super_admin": true } },
+    "create": {
+      "user_condition": {
+        "is_super_admin": true
+      }
+    },
     "read": {
       "$or": [
-        { "company_id": "{{user.company_id}}" },
-        { "id": "{{user.id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "company_id": "{{user.company_id}}"
+        },
+        {
+          "id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "update": {
       "$or": [
         {
+          "id": "{{user.id}}"
+        },
+        {
           "$and": [
-            { "company_id": "{{user.company_id}}" },
-            { "user_condition": { "role": "admin" } }
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            }
           ]
         },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     },
     "delete": {
       "$or": [
-        { "id": "{{user.id}}" },
-        { "user_condition": { "is_super_admin": true } }
+        {
+          "id": "{{user.id}}"
+        },
+        {
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "id": {
+                "$ne": "{{user.id}}"
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "is_super_admin": true
+          }
+        }
       ]
     }
   }
