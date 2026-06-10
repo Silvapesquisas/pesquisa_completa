@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, RefreshCw, Target, BarChart2 } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, Target, BarChart2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import FieldNotifications from "@/components/fieldapp/FieldNotifications";
@@ -89,16 +89,22 @@ function CodeLogin({ onLogin }) {
     if (code.length !== 8) { setError("O código deve ter 8 dígitos."); return; }
     setLoading(true);
     setError("");
-    const results = await base44.entities.FieldUser.filter({ access_code: code, active: true });
-    if (results.length === 0) {
-      setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
-      setLoading(false);
-      return;
+    try {
+      const results = await base44.entities.FieldUser.filter({ access_code: code, active: true });
+      if (results.length === 0) {
+        setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
+        setLoading(false);
+        return;
+      }
+      const fieldUser = results[0];
+      // Persist in localStorage for offline access
+      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(fieldUser));
+      onLogin(fieldUser);
+    } catch {
+      setError(navigator.onLine
+        ? "Erro ao verificar o código. Tente novamente."
+        : "Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
     }
-    const fieldUser = results[0];
-    // Persist in localStorage for offline access
-    localStorage.setItem(FIELD_USER_KEY, JSON.stringify(fieldUser));
-    onLogin(fieldUser);
     setLoading(false);
   };
 
@@ -150,7 +156,9 @@ export default function FieldApp() {
   const [location, setLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null); // URL para reprodução (remota ou data URL local)
+  const [audioRemoteUrl, setAudioRemoteUrl] = useState(null); // URL já enviada ao servidor
+  const [audioBase64, setAudioBase64] = useState(null); // áudio aguardando upload (gravado offline)
   const [audioDuration, setAudioDuration] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -165,6 +173,7 @@ export default function FieldApp() {
   const audioChunks = useRef([]);
   const startTime = useRef(null);
   const autoSaveTimer = useRef(null);
+  const locationWatch = useRef(null);
 
   const {
     isOnline, drafts, syncing, lastSynced, syncLogs,
@@ -214,12 +223,18 @@ export default function FieldApp() {
   // Load surveys when user is set and online
   useEffect(() => {
     if (fieldUser && isOnline) loadSurveys(fieldUser);
-  }, [fieldUser, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fieldUser, isOnline]);  
 
   const allSurveys = [
     ...offlineSurveys,
     ...onlineSurveys.filter(s => !offlineSurveys.find(o => o.id === s.id)),
   ];
+
+  // Entrevistas concluídas offline (aguardando sincronização) também contam para o limite
+  const effectiveCounts = { ...myInterviewCounts };
+  drafts.filter(d => d.status === "concluida").forEach(d => {
+    effectiveCounts[d.survey_id] = (effectiveCounts[d.survey_id] || 0) + 1;
+  });
 
   // Retorna o limite efetivo: personalizado do entrevistador ou padrão da pesquisa
   const getEffectiveLimit = (survey) => {
@@ -238,20 +253,81 @@ export default function FieldApp() {
     setAnswers({});
   };
 
-  const getLocation = (silent = false) => {
-    setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      pos => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationLoading(false); },
-      () => {
-        setLocationLoading(false);
-        if (!silent) alert("Não foi possível obter localização. Verifique as permissões do navegador/dispositivo.");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+  // Precisão alvo do GPS em metros: ao atingi-la a captura é encerrada;
+  // até lá, leituras vão sendo refinadas (a primeira leitura costuma ser imprecisa).
+  const GPS_TARGET_ACCURACY_M = 20;
+  const GPS_CAPTURE_TIMEOUT_MS = 25000;
+
+  const stopLocationCapture = () => {
+    if (!locationWatch.current) return;
+    navigator.geolocation.clearWatch(locationWatch.current.watchId);
+    clearTimeout(locationWatch.current.timer);
+    locationWatch.current = null;
+    setLocationLoading(false);
   };
 
+  useEffect(() => () => stopLocationCapture(), []);  
+
+  const getLocation = (silent = false) => {
+    if (!("geolocation" in navigator)) {
+      if (!silent) alert("Este dispositivo/navegador não suporta geolocalização.");
+      return;
+    }
+    stopLocationCapture();
+    setLocationLoading(true);
+    let best = null;
+
+    const watchId = navigator.geolocation.watchPosition(
+      pos => {
+        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        if (!best || fix.accuracy < best.accuracy) {
+          best = fix;
+          setLocation(fix);
+        }
+        if (fix.accuracy <= GPS_TARGET_ACCURACY_M) stopLocationCapture();
+      },
+      err => {
+        if (best) return; // já temos uma posição válida, ignora erros posteriores
+        stopLocationCapture();
+        if (silent) return;
+        const messages = {
+          1: "Permissão de localização negada. Habilite o acesso à localização nas configurações do navegador/dispositivo.",
+          2: "Localização indisponível. Verifique se o GPS está ativado.",
+          3: "Tempo esgotado ao obter localização. Tente novamente em área aberta.",
+        };
+        alert(messages[err.code] || "Não foi possível obter localização. Verifique as permissões do navegador/dispositivo.");
+      },
+      { enableHighAccuracy: true, timeout: GPS_CAPTURE_TIMEOUT_MS, maximumAge: 0 }
+    );
+    const timer = setTimeout(() => {
+      stopLocationCapture();
+      if (!best && !silent) alert("Tempo esgotado ao obter localização. Tente novamente em área aberta.");
+    }, GPS_CAPTURE_TIMEOUT_MS);
+    locationWatch.current = { watchId, timer };
+  };
+
+  const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+  // Limite para manter áudio offline no localStorage (~5MB total disponível)
+  const MAX_OFFLINE_AUDIO_BYTES = 2.5 * 1024 * 1024;
+
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert("Este dispositivo/navegador não suporta gravação de áudio.");
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      alert("Não foi possível acessar o microfone. Verifique as permissões do navegador/dispositivo.");
+      return;
+    }
     mediaRecorder.current = new MediaRecorder(stream);
     audioChunks.current = [];
     startTime.current = Date.now();
@@ -260,10 +336,27 @@ export default function FieldApp() {
       const blob = new Blob(audioChunks.current, { type: "audio/webm" });
       const duration = (Date.now() - startTime.current) / 1000;
       setAudioDuration(duration);
-      const file = new File([blob], "audio.webm", { type: "audio/webm" });
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setAudioUrl(file_url);
       stream.getTracks().forEach(t => t.stop());
+      const file = new File([blob], "audio.webm", { type: "audio/webm" });
+      try {
+        if (!navigator.onLine) throw new Error("offline");
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        setAudioRemoteUrl(file_url);
+        setAudioUrl(file_url);
+        setAudioBase64(null);
+      } catch {
+        // Sem conexão (ou falha no upload): guarda o áudio localmente
+        // e envia junto com o rascunho na sincronização.
+        const dataUrl = await blobToDataUrl(blob);
+        setAudioRemoteUrl(null);
+        setAudioUrl(dataUrl);
+        if (dataUrl.length <= MAX_OFFLINE_AUDIO_BYTES) {
+          setAudioBase64(dataUrl);
+        } else {
+          setAudioBase64(null);
+          alert("Áudio gravado, mas é muito longo para ser salvo offline. Ele será perdido se você fechar o app antes de voltar a ter conexão.");
+        }
+      }
     };
     mediaRecorder.current.start();
     setRecording(true);
@@ -312,7 +405,8 @@ export default function FieldApp() {
       answers: formattedAnswers,
       latitude: location?.lat || null,
       longitude: location?.lng || null,
-      audio_url: audioUrl,
+      location_accuracy: location?.accuracy || null,
+      audio_url: audioRemoteUrl,
       audio_duration: audioDuration,
       notes,
       completed_at: new Date().toISOString(),
@@ -322,7 +416,7 @@ export default function FieldApp() {
 
   const saveAsDraft = (andExit = false) => {
     const data = buildInterviewData();
-    const draftId = saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
+    const draftId = saveDraft({ ...data, _draftId: currentDraftId, _audioBase64: audioBase64, status: "em_andamento" });
     setCurrentDraftId(draftId);
     if (andExit) { resetInterview(); } else { alert("Rascunho salvo!"); }
   };
@@ -331,15 +425,31 @@ export default function FieldApp() {
     setSaving(true);
     const interviewData = buildInterviewData();
     if (!isOnline) {
-      saveDraft({ ...interviewData, _draftId: currentDraftId });
+      saveDraft({ ...interviewData, _draftId: currentDraftId, _audioBase64: audioBase64 });
       setSaving(false);
       setStep("done");
       return;
     }
-    await base44.entities.Interview.create(interviewData);
-    if (currentDraftId) removeDraft(currentDraftId);
+    try {
+      // Áudio gravado offline e ainda não enviado: faz o upload antes de criar a entrevista
+      if (!interviewData.audio_url && audioBase64) {
+        const blob = await (await fetch(audioBase64)).blob();
+        const file = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        interviewData.audio_url = file_url;
+        setAudioRemoteUrl(file_url);
+        setAudioBase64(null);
+      }
+      await base44.entities.Interview.create(interviewData);
+      if (currentDraftId) removeDraft(currentDraftId);
+      setStep("done");
+    } catch {
+      // Falha no envio (conexão instável, etc.): preserva como rascunho para sincronizar depois
+      saveDraft({ ...interviewData, _draftId: currentDraftId, _audioBase64: audioBase64 });
+      alert("Falha ao enviar a entrevista. Ela foi salva como rascunho e será sincronizada automaticamente.");
+      setStep("done");
+    }
     setSaving(false);
-    setStep("done");
   };
 
   const loadDraft = (draft) => {
@@ -352,6 +462,13 @@ export default function FieldApp() {
     setSelectedSurvey(survey);
     setAnswers(answersMap);
     setNotes(draft.notes || "");
+    setLocation(draft.latitude && draft.longitude
+      ? { lat: draft.latitude, lng: draft.longitude, accuracy: draft.location_accuracy || null }
+      : null);
+    setAudioRemoteUrl(draft.audio_url || null);
+    setAudioBase64(draft._audioBase64 || null);
+    setAudioUrl(draft.audio_url || draft._audioBase64 || null);
+    setAudioDuration(draft.audio_duration || 0);
     setCurrentDraftId(draft._draftId);
     setCurrentIndex(0);
     setStep("interview");
@@ -361,25 +478,35 @@ export default function FieldApp() {
     if (confirm("Excluir este rascunho?")) removeDraft(draftId);
   };
 
+  // Ref com o snapshot do auto-save: evita closures obsoletas (notes/localização)
+  // e reiniciar o intervalo a cada tecla digitada.
+  const autoSaveRef = useRef(null);
+  autoSaveRef.current = selectedSurvey
+    ? { data: buildInterviewData(), draftId: currentDraftId, audioBase64 }
+    : null;
+
   useEffect(() => {
     if (step !== "interview") {
       if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
       return;
     }
     autoSaveTimer.current = setInterval(() => {
-      if (selectedSurvey) {
-        const data = buildInterviewData();
-        saveDraft({ ...data, _draftId: currentDraftId, status: "em_andamento" });
-        setAutoSaveMsg("Salvo automaticamente");
-        setTimeout(() => setAutoSaveMsg(""), 2000);
-      }
+      const snapshot = autoSaveRef.current;
+      if (!snapshot) return;
+      const draftId = saveDraft({ ...snapshot.data, _draftId: snapshot.draftId, _audioBase64: snapshot.audioBase64, status: "em_andamento" });
+      // Mantém o mesmo rascunho nos próximos auto-saves em vez de criar duplicados
+      if (!snapshot.draftId) setCurrentDraftId(draftId);
+      setAutoSaveMsg("Salvo automaticamente");
+      setTimeout(() => setAutoSaveMsg(""), 2000);
     }, 30000);
     return () => clearInterval(autoSaveTimer.current);
-  }, [step, answers, currentDraftId, selectedSurvey]);
+  }, [step, saveDraft]);
 
   const resetInterview = () => {
+    stopLocationCapture();
     setStep("select"); setSelectedSurvey(null); setAnswers({});
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
+    setAudioRemoteUrl(null); setAudioBase64(null); setAudioDuration(0);
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
   };
@@ -431,10 +558,20 @@ export default function FieldApp() {
           </h3>
           {location ? (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-green-600 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-              </p>
-              <button onClick={() => getLocation()} className="text-xs text-gray-400 hover:text-blue-600 underline">Atualizar</button>
+              <div>
+                <p className="text-sm text-green-600 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" /> {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+                </p>
+                {location.accuracy != null && (
+                  <p className={`text-xs mt-0.5 ${location.accuracy <= GPS_TARGET_ACCURACY_M ? "text-green-500" : "text-orange-500"}`}>
+                    Precisão: ±{Math.round(location.accuracy)}m
+                    {location.accuracy > GPS_TARGET_ACCURACY_M && " — tente atualizar em área aberta para melhorar"}
+                  </p>
+                )}
+              </div>
+              <button onClick={() => getLocation()} disabled={locationLoading} className="text-xs text-gray-400 hover:text-blue-600 underline shrink-0">
+                {locationLoading ? "Obtendo..." : "Atualizar"}
+              </button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -476,7 +613,7 @@ export default function FieldApp() {
             <Button variant="outline" onClick={() => { setStep("interview"); setCurrentIndex(visibleQuestions.length - 1); }}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="outline" className="flex-1" onClick={saveAsDraft}>
+            <Button variant="outline" className="flex-1" onClick={() => saveAsDraft(false)}>
               <Save className="w-4 h-4 mr-1" /> Rascunho
             </Button>
             <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={submit} disabled={saving}>
@@ -491,7 +628,7 @@ export default function FieldApp() {
 
   // ── INTERVIEW ──
   if (step === "interview" && currentQuestion) {
-    const myCount = myInterviewCounts[selectedSurvey?.id] || 0;
+    const myCount = effectiveCounts[selectedSurvey?.id] || 0;
     const limit = selectedSurvey ? getEffectiveLimit(selectedSurvey) : null;
     const limitReached = limit && myCount >= limit;
 
@@ -645,16 +782,18 @@ export default function FieldApp() {
           isOnline={isOnline}
           loadingSurveys={loadingSurveys}
           onRefresh={() => loadSurveys(fieldUser)}
-          myInterviewCounts={myInterviewCounts}
+          myInterviewCounts={effectiveCounts}
           getEffectiveLimit={getEffectiveLimit}
           onSelect={(s) => {
             const limit = getEffectiveLimit(s);
-            const myCount = myInterviewCounts[s.id] || 0;
+            const myCount = effectiveCounts[s.id] || 0;
             if (limit && myCount >= limit) {
               alert(`Você atingiu o limite de ${limit} entrevistas para esta pesquisa.`);
               return;
             }
-            setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null); setAudioUrl(null); setAudioDuration(0); setRecording(false);
+            setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null);
+            setAudioUrl(null); setAudioRemoteUrl(null); setAudioBase64(null); setAudioDuration(0); setRecording(false);
+            setCurrentDraftId(null);
             setStep("interview"); getLocation(true);
           }}
         />

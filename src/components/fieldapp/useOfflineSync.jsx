@@ -10,6 +10,12 @@ function loadJSON(key, fallback) {
   catch { return fallback; }
 }
 
+// Pode falhar por falta de espaço (QuotaExceededError) — não derruba o app
+function persist(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (e) { console.error(`Falha ao salvar ${key} no localStorage:`, e); }
+}
+
 export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [drafts, setDrafts] = useState(() => loadJSON(DRAFTS_KEY, []));
@@ -29,22 +35,19 @@ export function useOfflineSync() {
   }, []);
 
   // Persist to localStorage
-  useEffect(() => { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); }, [drafts]);
-  useEffect(() => { localStorage.setItem(OFFLINE_SURVEYS_KEY, JSON.stringify(offlineSurveys)); }, [offlineSurveys]);
-  useEffect(() => {
-    // Keep only last 50 logs
-    const trimmed = syncLogs.slice(-50);
-    localStorage.setItem(SYNC_LOGS_KEY, JSON.stringify(trimmed));
-  }, [syncLogs]);
+  useEffect(() => { persist(DRAFTS_KEY, drafts); }, [drafts]);
+  useEffect(() => { persist(OFFLINE_SURVEYS_KEY, offlineSurveys); }, [offlineSurveys]);
+  useEffect(() => { persist(SYNC_LOGS_KEY, syncLogs.slice(-50)); }, [syncLogs]);
 
+  const logSeq = useRef(0);
   const addLog = useCallback((type, message, draftId = null) => {
     setSyncLogs(prev => [...prev, {
-      id: Date.now(),
+      id: `${Date.now()}_${logSeq.current++}`,
       type, // "success" | "error" | "info"
       message,
       draftId,
       timestamp: new Date().toISOString(),
-    }]);
+    }].slice(-50));
   }, []);
 
   const saveDraft = useCallback((interviewData) => {
@@ -69,7 +72,10 @@ export function useOfflineSync() {
 
   const syncDrafts = useCallback(async () => {
     if (syncRef.current || !isOnline) return 0;
-    const pending = loadJSON(DRAFTS_KEY, []).filter(d => d._syncStatus !== "failed_permanent");
+    // Sincroniza apenas entrevistas CONCLUÍDAS. Rascunhos "em_andamento"
+    // (auto-save de entrevistas em curso) permanecem locais até serem finalizados.
+    const pending = loadJSON(DRAFTS_KEY, [])
+      .filter(d => d._syncStatus !== "failed_permanent" && d.status === "concluida");
     if (pending.length === 0) return 0;
 
     syncRef.current = true;
@@ -80,8 +86,15 @@ export function useOfflineSync() {
     const successIds = [];
 
     for (const draft of pending) {
-      const { _draftId, _savedAt, _syncStatus, ...interviewData } = draft;
+      const { _draftId, _savedAt, _syncStatus, _lastError, _audioBase64, ...interviewData } = draft;
       try {
+        // Áudio gravado offline: envia o arquivo antes de criar a entrevista
+        if (_audioBase64 && !interviewData.audio_url) {
+          const blob = await (await fetch(_audioBase64)).blob();
+          const file = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          interviewData.audio_url = file_url;
+        }
         await base44.entities.Interview.create(interviewData);
         successIds.push(_draftId);
         successCount++;
@@ -107,15 +120,15 @@ export function useOfflineSync() {
 
   // Auto-sync on reconnect
   useEffect(() => {
-    if (isOnline && drafts.length > 0) { syncDrafts(); }
-  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isOnline && drafts.some(d => d.status === "concluida")) { syncDrafts(); }
+  }, [isOnline]);  
 
-  // Periodic auto-sync every 2 minutes when online and has pending drafts
+  // Periodic auto-sync every 2 minutes when online and has pending completed drafts
   useEffect(() => {
     if (!isOnline) return;
     const interval = setInterval(() => {
       const current = loadJSON(DRAFTS_KEY, []);
-      if (current.length > 0) syncDrafts();
+      if (current.some(d => d.status === "concluida")) syncDrafts();
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isOnline, syncDrafts]);

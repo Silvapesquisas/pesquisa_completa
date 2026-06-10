@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Wifi, WifiOff, CloudUpload, CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Clock, XCircle, Info } from "lucide-react";
+import { WifiOff, CloudUpload, CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Clock, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -24,7 +24,8 @@ function LogEntry({ log }) {
 
 export default function SyncStatusBar({ isOnline, syncing, drafts, lastSynced, onSync, syncLogs = [], onClearLogs }) {
   const [showLogs, setShowLogs] = useState(false);
-  const pendingCount = drafts.length;
+  // Apenas entrevistas concluídas são sincronizadas; rascunhos em andamento permanecem locais
+  const pendingCount = drafts.filter(d => d.status === "concluida").length;
   const errorCount = drafts.filter(d => d._syncStatus === "error").length;
 
   let barColor = "bg-green-50 border-green-200";
