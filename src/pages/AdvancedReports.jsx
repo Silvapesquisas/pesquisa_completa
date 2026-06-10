@@ -126,8 +126,9 @@ export default function AdvancedReports() {
   const PER_PAGE = 20;
 
   useEffect(() => {
-    setLoading(true);
-    base44.auth.me().then(async (me) => {
+    const load = async () => {
+      setLoading(true);
+      const me = await base44.auth.me();
       const companyId = me?.company_id;
       const [sv, iv] = await Promise.all([
         companyId
@@ -140,7 +141,8 @@ export default function AdvancedReports() {
       setSurveys(sv);
       setInterviews(iv);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    };
+    load().catch(() => setLoading(false));
   }, []);
 
   const interviewers = useMemo(() =>

@@ -25,7 +25,8 @@ export default function Reports() {
   const [preview, setPreview] = useState(false);
 
   useEffect(() => {
-    base44.auth.me().then(async (me) => {
+    const load = async () => {
+      const me = await base44.auth.me();
       const companyId = me?.company_id;
       const [sv, iv] = await Promise.all([
         companyId
@@ -37,7 +38,8 @@ export default function Reports() {
       ]);
       setSurveys(sv);
       setInterviews(iv);
-    });
+    };
+    load().catch(() => {});
   }, []);
 
   const filtered = interviews.filter(i => {
