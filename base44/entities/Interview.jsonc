@@ -65,6 +65,10 @@
     "longitude": {
       "type": "number"
     },
+    "location_accuracy": {
+      "type": "number",
+      "description": "Precisão do GPS em metros no momento da captura"
+    },
     "location_address": {
       "type": "string"
     },

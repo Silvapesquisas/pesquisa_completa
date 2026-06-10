@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Save } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
 
 export default function InterviewEdit() {
   const navigate = useNavigate();

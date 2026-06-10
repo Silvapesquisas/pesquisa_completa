@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Download, Loader2, BarChart2, Map, PieChart, Users } from "lucide-react";
+import { FileText, Loader2, BarChart2, Map, PieChart, Users } from "lucide-react";
 import { format, isAfter, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChartCard, PieChartCard } from "@/components/reports/InterviewCharts";

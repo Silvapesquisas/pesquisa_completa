@@ -1,4 +1,4 @@
-import { Clock, CheckCircle2, AlertCircle, Trash2, Edit, ChevronRight } from "lucide-react";
+import { Clock, AlertCircle, Trash2, Edit } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,10 +6,16 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const statusConfig = {
-  pending: { label: "Pendente", color: "bg-yellow-100 text-yellow-700", icon: Clock },
-  error: { label: "Erro", color: "bg-red-100 text-red-700", icon: AlertCircle },
+  pending: { label: "Aguardando envio", color: "bg-yellow-100 text-yellow-700", icon: Clock },
+  error: { label: "Erro no envio", color: "bg-red-100 text-red-700", icon: AlertCircle },
   em_andamento: { label: "Em andamento", color: "bg-blue-100 text-blue-700", icon: Edit },
 };
+
+function draftStatus(draft) {
+  if (draft._syncStatus === "error") return statusConfig.error;
+  if (draft.status === "em_andamento") return statusConfig.em_andamento;
+  return statusConfig.pending;
+}
 
 export default function DraftsList({ drafts, onEdit, onDelete }) {
   if (drafts.length === 0) return null;
@@ -21,7 +27,7 @@ export default function DraftsList({ drafts, onEdit, onDelete }) {
         <Badge className="bg-yellow-100 text-yellow-700 border-0">{drafts.length}</Badge>
       </h2>
       {drafts.map(draft => {
-        const status = statusConfig[draft._syncStatus] || statusConfig.pending;
+        const status = draftStatus(draft);
         const Icon = status.icon;
         const savedDate = draft._savedAt ? new Date(draft._savedAt) : null;
         return (

@@ -166,7 +166,7 @@ export default function InterviewerDashboard() {
 
   useEffect(() => {
     if (fieldUser && isOnline) loadData(fieldUser);
-  }, [fieldUser, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fieldUser, isOnline]);  
 
   if (loadingUser) {
     return (
