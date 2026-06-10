@@ -21,25 +21,29 @@ export function useCompanyScope() {
       .finally(() => setLoading(false));
   }, []);
 
+  const isAdmin = me?.role === "admin";
+  // Super-admin da plataforma: flag explícita (usada pelo RLS no servidor) ou,
+  // por compatibilidade, admin sem empresa vinculada
+  const isSuperAdmin = me?.is_super_admin === true || (isAdmin && !companyId);
+
   /**
    * Returns a filter object that always includes company_id.
-   * If the user has no company_id (super-admin), returns the extra filters only.
+   * Only the platform super-admin gets an unscoped filter.
    */
   const scopeFilter = (extra = {}) => {
-    if (!companyId) return extra; // super-admin sees everything
+    if (isSuperAdmin) return extra;
     return { company_id: companyId, ...extra };
   };
 
   /**
-   * Scoped list: filter by company_id when available.
+   * Scoped list: filter by company_id. Users without a company (and that are
+   * not super-admin) get nothing — never an unscoped list.
    */
   const scopedList = async (entity, sort = "-created_date", limit = 200, extra = {}) => {
-    if (!companyId) return entity.list(sort, limit);
+    if (isSuperAdmin) return entity.list(sort, limit);
+    if (!companyId) return [];
     return entity.filter({ company_id: companyId, ...extra }, sort, limit);
   };
-
-  const isAdmin = me?.role === "admin";
-  const isSuperAdmin = isAdmin && !companyId; // admin with no company = platform super-admin
 
   return { me, companyId, loading, scopeFilter, scopedList, isAdmin, isSuperAdmin };
 }

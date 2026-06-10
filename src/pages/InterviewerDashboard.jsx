@@ -92,11 +92,16 @@ function CodeLoginMini({ onLogin }) {
   const handle = async () => {
     if (code.length !== 8) { setError("O código deve ter 8 dígitos."); return; }
     setLoading(true); setError("");
-    const results = await base44.entities.FieldUser.filter({ access_code: code, active: true });
-    if (!results.length) { setError("Código inválido."); setLoading(false); return; }
-    const fu = results[0];
-    localStorage.setItem(FIELD_USER_KEY, JSON.stringify(fu));
-    onLogin(fu);
+    try {
+      // Login validado no servidor (entidades protegidas por RLS)
+      const res = await base44.functions.invoke("fieldLogin", { code });
+      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(res.fieldUser));
+      onLogin(res.fieldUser);
+    } catch (e) {
+      setError(e?.status === 401 || e?.status === 400
+        ? "Código inválido."
+        : "Erro ao verificar o código. Tente novamente.");
+    }
     setLoading(false);
   };
 
@@ -143,30 +148,26 @@ export default function InterviewerDashboard() {
   const loadData = async (user) => {
     if (!user || !isOnline) return;
     setLoading(true);
-    const [freshUsers, allActive, myInterviews] = await Promise.all([
-      base44.entities.FieldUser.filter({ access_code: user.access_code, active: true }),
-      base44.entities.Survey.filter({ status: "ativa" }),
-      base44.entities.Interview.filter({ field_user_id: user.id }),
-    ]);
-
-    const freshUser = freshUsers[0] || user;
-    localStorage.setItem(FIELD_USER_KEY, JSON.stringify(freshUser));
-    setFieldUser(freshUser);
-
-    const assigned = freshUser.assigned_survey_ids || [];
-    const mySurveys = assigned.length > 0
-      ? allActive.filter(s => assigned.includes(s.id))
-      : allActive;
-
-    setSurveys(mySurveys);
-    setAllMyInterviews(myInterviews);
-    setLastRefresh(new Date());
+    try {
+      // Dados validados no servidor e restritos à empresa/atribuições do
+      // entrevistador (pesquisas ativas + entrevistas próprias)
+      const res = await base44.functions.invoke("fieldLogin", { code: user.access_code, withInterviews: true });
+      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(res.fieldUser));
+      setFieldUser(res.fieldUser);
+      setSurveys(res.surveys || []);
+      setAllMyInterviews(res.myInterviews || []);
+      setLastRefresh(new Date());
+    } catch {
+      // mantém os dados anteriores em caso de falha
+    }
     setLoading(false);
   };
 
+  // Dependência pelo access_code (não pelo objeto): loadData grava um objeto
+  // novo em fieldUser e usar o objeto causava loop infinito de requisições.
   useEffect(() => {
     if (fieldUser && isOnline) loadData(fieldUser);
-  }, [fieldUser, isOnline]);  
+  }, [fieldUser?.access_code, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadingUser) {
     return (

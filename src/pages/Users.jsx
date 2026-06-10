@@ -33,12 +33,24 @@ export default function Users() {
   };
   useEffect(() => { load(); }, []);
 
+  // Gestão de usuários: somente admins, e apenas dentro da própria empresa
+  // (super-admin sem empresa gerencia todos). O RLS aplica a mesma regra no
+  // servidor; aqui é defesa em profundidade e UX.
+  const isSuperAdmin = currentUser?.is_super_admin || (currentUser?.role === "admin" && !currentUser?.company_id);
+  const canManage = (target) => {
+    if (!currentUser || currentUser.role !== "admin") return false;
+    if (isSuperAdmin) return true;
+    return target.company_id === currentUser.company_id;
+  };
+
   const toggleActive = async (u) => {
+    if (!canManage(u)) { alert("Você não tem permissão para gerenciar este usuário."); return; }
     await base44.entities.User.update(u.id, { active: !u.active });
     load();
   };
 
   const updateRole = async (u, role) => {
+    if (!canManage(u)) { alert("Você não tem permissão para gerenciar este usuário."); return; }
     await base44.entities.User.update(u.id, { role });
     load();
   };

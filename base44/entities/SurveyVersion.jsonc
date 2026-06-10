@@ -5,6 +5,10 @@
     "survey_id": {
       "type": "string"
     },
+    "company_id": {
+      "type": "string",
+      "description": "ID da empresa proprietária (para isolamento multi-tenant)"
+    },
     "version_number": {
       "type": "number"
     },
@@ -25,5 +29,33 @@
   "required": [
     "survey_id",
     "snapshot"
-  ]
+  ],
+  // Histórico de versões: mesmo isolamento por empresa das pesquisas.
+  // Versões são imutáveis (update bloqueado).
+  "rls": {
+    "create": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "update": false,
+    "delete": {
+      "$or": [
+        {
+          "$and": [
+            { "company_id": "{{user.company_id}}" },
+            { "user_condition": { "role": "admin" } }
+          ]
+        },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    }
+  }
 }

@@ -90,20 +90,21 @@ function CodeLogin({ onLogin }) {
     setLoading(true);
     setError("");
     try {
-      const results = await base44.entities.FieldUser.filter({ access_code: code, active: true });
-      if (results.length === 0) {
-        setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
-        setLoading(false);
-        return;
-      }
-      const fieldUser = results[0];
+      // Login validado no servidor (função backend) — as entidades são
+      // protegidas por RLS e não podem ser consultadas anonimamente
+      const res = await base44.functions.invoke("fieldLogin", { code });
+      const fieldUser = res.fieldUser;
       // Persist in localStorage for offline access
       localStorage.setItem(FIELD_USER_KEY, JSON.stringify(fieldUser));
       onLogin(fieldUser);
-    } catch {
-      setError(navigator.onLine
-        ? "Erro ao verificar o código. Tente novamente."
-        : "Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
+    } catch (e) {
+      if (!navigator.onLine) {
+        setError("Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
+      } else if (e?.status === 401 || e?.status === 400) {
+        setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
+      } else {
+        setError("Erro ao verificar o código. Tente novamente.");
+      }
     }
     setLoading(false);
   };
@@ -156,9 +157,8 @@ export default function FieldApp() {
   const [location, setLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null); // URL para reprodução (remota ou data URL local)
-  const [audioRemoteUrl, setAudioRemoteUrl] = useState(null); // URL já enviada ao servidor
-  const [audioBase64, setAudioBase64] = useState(null); // áudio aguardando upload (gravado offline)
+  const [audioUrl, setAudioUrl] = useState(null); // URL para reprodução (data URL local ou URL remota de rascunho antigo)
+  const [audioBase64, setAudioBase64] = useState(null); // áudio aguardando envio (o upload é feito pelo servidor no envio da entrevista)
   const [audioDuration, setAudioDuration] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -196,34 +196,27 @@ export default function FieldApp() {
     if (!user || !isOnline) return;
     setLoadingSurveys(true);
     try {
-      // Refresh fieldUser to get latest assigned_survey_ids
-      const results = await base44.entities.FieldUser.filter({ access_code: user.access_code, active: true });
-      const freshUser = results.length > 0 ? results[0] : user;
-      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(freshUser));
-      setFieldUser(freshUser);
-
-      const allActive = await base44.entities.Survey.filter({ status: "ativa" });
-      const assigned = freshUser.assigned_survey_ids || [];
-      const surveys = assigned.length > 0 ? allActive.filter(s => assigned.includes(s.id)) : allActive;
-      setOnlineSurveys(surveys);
-
-      // Count completed interviews per survey for this interviewer
-      if (freshUser.id) {
-        const myInterviews = await base44.entities.Interview.filter({ field_user_id: freshUser.id, status: "concluida" });
-        const counts = {};
-        myInterviews.forEach(iv => { counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1; });
-        setMyInterviewCounts(counts);
-      }
-    } catch (e) {
+      // Tudo vem da função backend, já validado e restrito à empresa do
+      // entrevistador: dados atualizados do FieldUser, pesquisas ativas
+      // atribuídas e contagem de entrevistas concluídas por pesquisa
+      const res = await base44.functions.invoke("fieldLogin", { code: user.access_code });
+      localStorage.setItem(FIELD_USER_KEY, JSON.stringify(res.fieldUser));
+      setFieldUser(res.fieldUser);
+      setOnlineSurveys(res.surveys || []);
+      setMyInterviewCounts(res.counts || {});
+    } catch {
       // silently fail
     }
     setLoadingSurveys(false);
   };
 
-  // Load surveys when user is set and online
+  // Load surveys when user is set and online.
+  // A dependência é o access_code (não o objeto fieldUser): loadSurveys grava
+  // um objeto novo em fieldUser e usar o objeto como dependência causava um
+  // loop infinito de requisições.
   useEffect(() => {
     if (fieldUser && isOnline) loadSurveys(fieldUser);
-  }, [fieldUser, isOnline]);  
+  }, [fieldUser?.access_code, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allSurveys = [
     ...offlineSurveys,
@@ -337,25 +330,16 @@ export default function FieldApp() {
       const duration = (Date.now() - startTime.current) / 1000;
       setAudioDuration(duration);
       stream.getTracks().forEach(t => t.stop());
-      const file = new File([blob], "audio.webm", { type: "audio/webm" });
-      try {
-        if (!navigator.onLine) throw new Error("offline");
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        setAudioRemoteUrl(file_url);
-        setAudioUrl(file_url);
+      // O áudio fica local (data URL) e é enviado ao servidor junto com a
+      // entrevista, pela função backend — o cliente anônimo não tem acesso
+      // direto ao upload de arquivos.
+      const dataUrl = await blobToDataUrl(blob);
+      setAudioUrl(dataUrl);
+      if (dataUrl.length <= MAX_OFFLINE_AUDIO_BYTES) {
+        setAudioBase64(dataUrl);
+      } else {
         setAudioBase64(null);
-      } catch {
-        // Sem conexão (ou falha no upload): guarda o áudio localmente
-        // e envia junto com o rascunho na sincronização.
-        const dataUrl = await blobToDataUrl(blob);
-        setAudioRemoteUrl(null);
-        setAudioUrl(dataUrl);
-        if (dataUrl.length <= MAX_OFFLINE_AUDIO_BYTES) {
-          setAudioBase64(dataUrl);
-        } else {
-          setAudioBase64(null);
-          alert("Áudio gravado, mas é muito longo para ser salvo offline. Ele será perdido se você fechar o app antes de voltar a ter conexão.");
-        }
+        alert("Áudio gravado, mas é muito longo para ser salvo com a entrevista. Grave trechos mais curtos.");
       }
     };
     mediaRecorder.current.start();
@@ -406,7 +390,7 @@ export default function FieldApp() {
       latitude: location?.lat || null,
       longitude: location?.lng || null,
       location_accuracy: location?.accuracy || null,
-      audio_url: audioRemoteUrl,
+      audio_url: null, // definido pelo servidor após o upload do áudio
       audio_duration: audioDuration,
       notes,
       completed_at: new Date().toISOString(),
@@ -431,22 +415,19 @@ export default function FieldApp() {
       return;
     }
     try {
-      // Áudio gravado offline e ainda não enviado: faz o upload antes de criar a entrevista
-      if (!interviewData.audio_url && audioBase64) {
-        const blob = await (await fetch(audioBase64)).blob();
-        const file = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        interviewData.audio_url = file_url;
-        setAudioRemoteUrl(file_url);
-        setAudioBase64(null);
-      }
-      await base44.entities.Interview.create(interviewData);
+      // O envio passa pela função backend, que valida o código de acesso e
+      // força empresa/entrevistador no servidor (entidades trancadas por RLS)
+      await base44.functions.invoke("fieldSubmitInterview", {
+        code: fieldUser.access_code,
+        interview: interviewData,
+        audio_base64: audioBase64 || undefined,
+      });
       if (currentDraftId) removeDraft(currentDraftId);
       setStep("done");
-    } catch {
+    } catch (e) {
       // Falha no envio (conexão instável, etc.): preserva como rascunho para sincronizar depois
       saveDraft({ ...interviewData, _draftId: currentDraftId, _audioBase64: audioBase64 });
-      alert("Falha ao enviar a entrevista. Ela foi salva como rascunho e será sincronizada automaticamente.");
+      alert(`Falha ao enviar a entrevista${e?.message ? `: ${e.message}` : ""}. Ela foi salva como rascunho e será sincronizada automaticamente.`);
       setStep("done");
     }
     setSaving(false);
@@ -465,7 +446,6 @@ export default function FieldApp() {
     setLocation(draft.latitude && draft.longitude
       ? { lat: draft.latitude, lng: draft.longitude, accuracy: draft.location_accuracy || null }
       : null);
-    setAudioRemoteUrl(draft.audio_url || null);
     setAudioBase64(draft._audioBase64 || null);
     setAudioUrl(draft.audio_url || draft._audioBase64 || null);
     setAudioDuration(draft.audio_duration || 0);
@@ -506,7 +486,7 @@ export default function FieldApp() {
     stopLocationCapture();
     setStep("select"); setSelectedSurvey(null); setAnswers({});
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
-    setAudioRemoteUrl(null); setAudioBase64(null); setAudioDuration(0);
+    setAudioBase64(null); setAudioDuration(0);
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
   };
@@ -792,7 +772,7 @@ export default function FieldApp() {
               return;
             }
             setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null);
-            setAudioUrl(null); setAudioRemoteUrl(null); setAudioBase64(null); setAudioDuration(0); setRecording(false);
+            setAudioUrl(null); setAudioBase64(null); setAudioDuration(0); setRecording(false);
             setCurrentDraftId(null);
             setStep("interview"); getLocation(true);
           }}

@@ -32,9 +32,9 @@ export default function FieldNotifications({ fieldUser }) {
 
     const check = async () => {
       try {
-        const results = await base44.entities.FieldUser.filter({ access_code: fieldUser.access_code, active: true });
-        if (!results.length) return;
-        const fresh = results[0];
+        // Dados validados no servidor, restritos à empresa do entrevistador
+        const res = await base44.functions.invoke("fieldLogin", { code: fieldUser.access_code });
+        const fresh = res.fieldUser;
         const assigned = fresh.assigned_survey_ids || [];
 
         if (prevSurveyIds.current === null) {
@@ -44,24 +44,21 @@ export default function FieldNotifications({ fieldUser }) {
 
         const prev = prevSurveyIds.current;
         const newIds = assigned.filter(id => !prev.includes(id));
-        const removedIds = prev.filter(id => !assigned.includes(id));
 
         const newNotifs = [];
 
         if (newIds.length > 0) {
-          try {
-            const surveys = await base44.entities.Survey.filter({ status: "ativa" });
-            newIds.forEach(id => {
-              const s = surveys.find(sv => sv.id === id);
-              newNotifs.push({
-                id: `new_${id}_${Date.now()}`,
-                type: "assigned",
-                title: "Nova pesquisa atribuída!",
-                message: s ? `"${s.title}" foi adicionada à sua lista.` : "Uma nova pesquisa foi adicionada.",
-                timestamp: new Date().toISOString(),
-              });
+          const surveys = res.surveys || [];
+          newIds.forEach(id => {
+            const s = surveys.find(sv => sv.id === id);
+            newNotifs.push({
+              id: `new_${id}_${Date.now()}`,
+              type: "assigned",
+              title: "Nova pesquisa atribuída!",
+              message: s ? `"${s.title}" foi adicionada à sua lista.` : "Uma nova pesquisa foi adicionada.",
+              timestamp: new Date().toISOString(),
             });
-          } catch {}
+          });
         }
 
         if (newNotifs.length > 0) {

@@ -18,11 +18,12 @@ export default function InterviewDetail() {
 
   useEffect(() => {
     if (!id) return;
-    base44.entities.Interview.list().then(list => {
-      const found = list.find(i => i.id === id);
-      setInterview(found || null);
-      setLoading(false);
-    });
+    // Busca apenas o registro pedido; o RLS no servidor garante que só
+    // entrevistas da empresa do usuário sejam retornadas
+    base44.entities.Interview.filter({ id })
+      .then(list => setInterview(list[0] || null))
+      .catch(() => setInterview(null))
+      .finally(() => setLoading(false));
   }, [id]);
 
   if (loading) return <div className="p-6 text-gray-400">Carregando...</div>;

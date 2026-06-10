@@ -73,6 +73,7 @@ export default function Surveys() {
     const nextVersion = (existing[0]?.version_number || 0) + 1;
     await base44.entities.SurveyVersion.create({
       survey_id: s.id,
+      company_id: s.company_id, // isolamento multi-tenant (exigido pelo RLS)
       version_number: nextVersion,
       title: s.title,
       snapshot: s,

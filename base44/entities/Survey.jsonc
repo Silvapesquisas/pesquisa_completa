@@ -101,5 +101,34 @@
   },
   "required": [
     "title"
-  ]
+  ],
+  // Isolamento multi-tenant: membros só acessam pesquisas da própria empresa.
+  // Super-admin (User.is_super_admin = true) tem acesso global.
+  // O App de Campo (anônimo) lê pesquisas via função backend "fieldLogin".
+  "rls": {
+    "create": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    }
+  }
 }
