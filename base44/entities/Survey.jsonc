@@ -31,6 +31,10 @@
       ],
       "default": "rascunho"
     },
+    "company_id": {
+      "type": "string",
+      "description": "ID da empresa propriet\u00e1ria"
+    },
     "created_by_name": {
       "type": "string"
     },
