@@ -38,13 +38,16 @@ export default function NotificationBell({ user }) {
 
   // Real-time subscription
   useEffect(() => {
-    let unsub = null;
-    unsub = base44.entities.Notification.subscribe((event) => {
+    const result = base44.entities.Notification.subscribe((event) => {
       if (event.data?.user_email === user?.email) {
         load();
       }
     });
-    return () => { if (typeof unsub === "function") unsub(); };
+    return () => {
+      if (typeof result === "function") result();
+      else if (result && typeof result.destroy === "function") result.destroy();
+      else if (result && typeof result.unsubscribe === "function") result.unsubscribe();
+    };
   }, [user?.email]);
 
   const unread = notifications.filter(n => !n.read).length;
