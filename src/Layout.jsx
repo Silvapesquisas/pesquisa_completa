@@ -44,6 +44,26 @@ export default function Layout({ children, currentPageName }) {
     );
   }
 
+  // Usuários desativados pelo admin não acessam o painel
+  if (user && user.active === false) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-lg max-w-md w-full p-8 text-center space-y-4">
+          <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
+            <LogOut className="w-8 h-8 text-red-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Conta desativada</h2>
+            <p className="text-gray-500 text-sm mt-2">
+              Sua conta foi desativada pelo administrador. Entre em contato com o gestor da sua empresa para reativá-la.
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => base44.auth.logout()}>Sair</Button>
+        </div>
+      </div>
+    );
+  }
+
   // Non-super-admin users without a company see a blocking warning
   const needsCompany = user && !user.company_id && user.role !== "admin" && !isCompaniesPage;
   if (needsCompany) {
