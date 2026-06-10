@@ -147,7 +147,25 @@
     "read": {
       "$or": [
         {
-          "company_id": "{{user.company_id}}"
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "role": "admin"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "role": "supervisor"
+                  }
+                }
+              ]
+            }
+          ]
         },
         {
           "user_condition": {
@@ -159,7 +177,25 @@
     "update": {
       "$or": [
         {
-          "company_id": "{{user.company_id}}"
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "role": "admin"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "role": "supervisor"
+                  }
+                }
+              ]
+            }
+          ]
         },
         {
           "user_condition": {
