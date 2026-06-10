@@ -28,7 +28,9 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    base44.auth.me().catch(() => null).then(u => setUser(u));
+    let cancelled = false;
+    base44.auth.me().catch(() => null).then(u => { if (!cancelled) setUser(u); });
+    return () => { cancelled = true; };
   }, []);
 
   const isFieldApp = currentPageName === "FieldApp";
