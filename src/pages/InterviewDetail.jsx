@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MapPin, Mic, Clock, Edit, History, Play } from "lucide-react";
+import { ArrowLeft, MapPin, Mic, Clock, Edit, History, UserCheck } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -118,23 +118,68 @@ export default function InterviewDetail() {
         </Card>
       )}
 
-      {interview.edit_history?.length > 0 && (
-        <Card className="border-0 shadow-sm border-orange-100">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2 text-orange-700"><History className="w-4 h-4" /> Histórico de Edições</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {interview.edit_history.map((h, i) => (
-              <div key={i} className="flex gap-3 text-sm border-b pb-3 last:border-0">
-                <div className="w-1 bg-orange-200 rounded shrink-0" />
-                <div>
-                  <p className="font-medium text-gray-700">{h.edited_by_name || h.edited_by}</p>
-                  <p className="text-xs text-gray-400">{h.edited_at ? format(new Date(h.edited_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—"}</p>
-                  {h.changes_summary && <p className="text-xs text-gray-500 mt-1">{h.changes_summary}</p>}
+      {/* Audit log — always visible */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-gray-700">
+            <History className="w-4 h-4 text-blue-600" /> Histórico de Auditoria
+            <Badge variant="secondary" className="ml-auto text-xs font-normal">
+              {1 + (interview.edit_history?.length || 0)} evento(s)
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Edits — newest first */}
+          {[...(interview.edit_history || [])].reverse().map((h, i) => (
+            <div key={i} className="flex gap-3 text-sm">
+              <div className="flex flex-col items-center gap-1 shrink-0">
+                <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Edit className="w-3.5 h-3.5 text-orange-600" />
                 </div>
+                <div className="w-px flex-1 bg-gray-200 min-h-[12px]" />
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              <div className="pb-3 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-gray-800">{h.edited_by_name || h.edited_by}</span>
+                  <Badge variant="outline" className="text-xs border-orange-200 text-orange-700">Editou</Badge>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {h.edited_at ? format(new Date(h.edited_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : "—"}
+                </p>
+                {h.changes_summary && (
+                  <p className="text-xs text-gray-500 mt-1 bg-gray-50 rounded px-2 py-1 break-words">{h.changes_summary}</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Creation entry — always at the bottom */}
+          <div className="flex gap-3 text-sm">
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center">
+                <UserCheck className="w-3.5 h-3.5 text-green-600" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-gray-800">{interview.interviewer_name || "Entrevistador"}</span>
+                <Badge variant="outline" className="text-xs border-green-200 text-green-700">Criou</Badge>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {interview.completed_at
+                  ? format(new Date(interview.completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                  : interview.created_date
+                    ? format(new Date(interview.created_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                    : "—"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1 bg-gray-50 rounded px-2 py-1">
+                Entrevista registrada via App de Campo · {interview.answers?.length || 0} resposta(s)
+                {interview.latitude ? ` · GPS: ${interview.latitude.toFixed(5)}, ${interview.longitude.toFixed(5)}` : ""}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

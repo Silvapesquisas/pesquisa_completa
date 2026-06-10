@@ -40,6 +40,31 @@ export default function InterviewEdit() {
     setAnswers(newAnswers);
   };
 
+  const buildDiff = () => {
+    const changes = [];
+
+    // Check notes change
+    const oldNotes = interview.notes || "";
+    if (notes.trim() !== oldNotes.trim()) {
+      changes.push(`Observações alteradas: "${oldNotes.trim() || "(vazio)"}" → "${notes.trim() || "(vazio)"}"`);
+    }
+
+    // Check answer changes
+    const oldAnswers = interview.answers || [];
+    answers.forEach((a, i) => {
+      const old = oldAnswers[i];
+      if (!old) return;
+      const oldVal = old.answer || "";
+      const newVal = a.answer || "";
+      if (oldVal !== newVal) {
+        const label = a.question_text ? `"${a.question_text.slice(0, 40)}${a.question_text.length > 40 ? "…" : ""}"` : `Q${i + 1}`;
+        changes.push(`${label}: "${oldVal || "(vazio)"}" → "${newVal || "(vazio)"}"`);
+      }
+    });
+
+    return changes.length > 0 ? changes.join(" | ") : "Edição sem alterações detectadas";
+  };
+
   const save = async () => {
     if (!interview) return;
     setSaving(true);
@@ -48,7 +73,7 @@ export default function InterviewEdit() {
       edited_at: now,
       edited_by: user?.email || "desconhecido",
       edited_by_name: user?.full_name || user?.email || "desconhecido",
-      changes_summary: `Edição manual das respostas em ${format(new Date(), "dd/MM/yyyy HH:mm")}`
+      changes_summary: buildDiff(),
     }];
     await base44.entities.Interview.update(id, { answers, notes, edit_history: history });
     setSaving(false);
