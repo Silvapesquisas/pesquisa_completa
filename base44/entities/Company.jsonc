@@ -42,5 +42,18 @@
   "required": [
     "name",
     "owner_email"
-  ]
+  ],
+  // Cada usuário lê apenas a própria empresa; criar/editar/excluir empresas
+  // é exclusivo do super-admin da plataforma.
+  "rls": {
+    "create": { "user_condition": { "is_super_admin": true } },
+    "read": {
+      "$or": [
+        { "id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "update": { "user_condition": { "is_super_admin": true } },
+    "delete": { "user_condition": { "is_super_admin": true } }
+  }
 }

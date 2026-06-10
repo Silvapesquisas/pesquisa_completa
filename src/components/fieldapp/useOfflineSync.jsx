@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 const DRAFTS_KEY = "fieldsurvey_drafts";
 const OFFLINE_SURVEYS_KEY = "fieldsurvey_offline_surveys";
 const SYNC_LOGS_KEY = "fieldsurvey_sync_logs";
+const FIELD_USER_KEY = "fieldapp_user";
 
 function loadJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -78,6 +79,14 @@ export function useOfflineSync() {
       .filter(d => d._syncStatus !== "failed_permanent" && d.status === "concluida");
     if (pending.length === 0) return 0;
 
+    // O envio passa pela função backend "fieldSubmitInterview", que valida o
+    // código de acesso e força empresa/entrevistador no servidor
+    const accessCode = loadJSON(FIELD_USER_KEY, null)?.access_code;
+    if (!accessCode) {
+      addLog("error", "Sessão do entrevistador não encontrada. Faça login novamente para sincronizar.");
+      return 0;
+    }
+
     syncRef.current = true;
     setSyncing(true);
     addLog("info", `Iniciando sincronização de ${pending.length} rascunho(s)...`);
@@ -88,14 +97,11 @@ export function useOfflineSync() {
     for (const draft of pending) {
       const { _draftId, _savedAt, _syncStatus, _lastError, _audioBase64, ...interviewData } = draft;
       try {
-        // Áudio gravado offline: envia o arquivo antes de criar a entrevista
-        if (_audioBase64 && !interviewData.audio_url) {
-          const blob = await (await fetch(_audioBase64)).blob();
-          const file = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
-          const { file_url } = await base44.integrations.Core.UploadFile({ file });
-          interviewData.audio_url = file_url;
-        }
-        await base44.entities.Interview.create(interviewData);
+        await base44.functions.invoke("fieldSubmitInterview", {
+          code: accessCode,
+          interview: interviewData,
+          audio_base64: _audioBase64 || undefined,
+        });
         successIds.push(_draftId);
         successCount++;
         addLog("success", `"${interviewData.survey_title || "Entrevista"}" enviada com sucesso.`, _draftId);

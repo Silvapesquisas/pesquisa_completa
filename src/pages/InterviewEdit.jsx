@@ -23,14 +23,16 @@ export default function InterviewEdit() {
   useEffect(() => {
     base44.auth.me().then(u => setUser(u));
     if (!id) return;
-    base44.entities.Interview.list().then(list => {
-      const found = list.find(i => i.id === id);
+    // Busca apenas o registro pedido; o RLS no servidor garante que só
+    // entrevistas da empresa do usuário sejam retornadas
+    base44.entities.Interview.filter({ id }).then(list => {
+      const found = list[0];
       if (found) {
         setInterview(found);
         setAnswers(found.answers || []);
         setNotes(found.notes || "");
       }
-    });
+    }).catch(() => {});
   }, [id]);
 
   const updateAnswer = (idx, field, value) => {

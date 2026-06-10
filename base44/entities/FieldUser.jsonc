@@ -54,5 +54,49 @@
     "name",
     "company_id",
     "access_code"
-  ]
+  ],
+  // Entidade mais sensível (contém os códigos de acesso do App de Campo).
+  // Leitura restrita a membros da empresa; gestão restrita a admins da empresa.
+  // O login por código (anônimo) é feito pela função backend "fieldLogin".
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "$and": [
+            { "company_id": "{{user.company_id}}" },
+            { "user_condition": { "role": "admin" } }
+          ]
+        },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "company_id": "{{user.company_id}}" },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            { "company_id": "{{user.company_id}}" },
+            { "user_condition": { "role": "admin" } }
+          ]
+        },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "$and": [
+            { "company_id": "{{user.company_id}}" },
+            { "user_condition": { "role": "admin" } }
+          ]
+        },
+        { "user_condition": { "is_super_admin": true } }
+      ]
+    }
+  }
 }

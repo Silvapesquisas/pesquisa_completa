@@ -144,10 +144,12 @@ export default function SurveyBuilder() {
 
   useEffect(() => {
     if (editId) {
-      base44.entities.Survey.list().then(list => {
-        const found = list.find(s => s.id === editId);
+      // Busca apenas o registro pedido; o RLS no servidor garante que só
+      // pesquisas da empresa do usuário sejam retornadas
+      base44.entities.Survey.filter({ id: editId }).then(list => {
+        const found = list[0];
         if (found) setSurvey({ ...found, questions: found.questions || [] });
-      });
+      }).catch(() => {});
     }
   }, [editId]);
 
