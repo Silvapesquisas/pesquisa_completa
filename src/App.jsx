@@ -31,6 +31,9 @@ const pageTransition = {
   duration: 0.28,
 };
 
+// A página fica no fluxo normal do documento (sem position:absolute):
+// com absolute o contêiner pai colapsava para altura 0 e, junto com
+// overflow:hidden, todo o conteúdo das páginas era cortado (telas em branco).
 const AnimatedRoute = ({ children }) => (
   <motion.div
     variants={pageVariants}
@@ -38,7 +41,7 @@ const AnimatedRoute = ({ children }) => (
     animate="animate"
     exit="exit"
     transition={pageTransition}
-    style={{ position: "absolute", width: "100%", minHeight: "100%" }}
+    style={{ width: "100%" }}
   >
     {children}
   </motion.div>
@@ -70,8 +73,8 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <div style={{ position: "relative", overflow: "hidden" }}>
-      <AnimatePresence mode="popLayout" initial={false}>
+    <div style={{ position: "relative", overflowX: "clip" }}>
+      <AnimatePresence mode="wait" initial={false}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={
             <AnimatedRoute>
