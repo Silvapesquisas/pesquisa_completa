@@ -22,8 +22,12 @@ export default function NotificationBell({ user }) {
 
   const load = async () => {
     if (!user?.email) return;
-    const all = await base44.entities.Notification.filter({ user_email: user.email }, "-created_date", 30);
-    setNotifications(all);
+    try {
+      const all = await base44.entities.Notification.filter({ user_email: user.email }, "-created_date", 30);
+      setNotifications(all);
+    } catch {
+      // silently ignore network errors
+    }
   };
 
   useEffect(() => {
