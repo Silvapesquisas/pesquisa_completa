@@ -14,14 +14,26 @@
     },
     "field_user_id": {
       "type": "string",
-      "description": "ID do FieldUser (entrevistador de campo)"
+      "description": "ID do FieldUser (entrevistador de campo)",
+      // Atribuição imutável: definida apenas pela função backend (service role,
+      // que não passa pelo RLS). Usuários do painel editam respostas/notas,
+      // mas não reatribuem entrevistas a outro entrevistador.
+      "rls": {
+        "write": { "user_condition": { "is_super_admin": true } }
+      }
     },
     "interviewer_name": {
       "type": "string"
     },
     "company_id": {
       "type": "string",
-      "description": "ID da empresa"
+      "description": "ID da empresa",
+      // Imutável para usuários comuns: o valor é gravado pela função backend
+      // (service role) a partir do cadastro do entrevistador. Impede que uma
+      // entrevista seja "movida" para outra empresa via update.
+      "rls": {
+        "write": { "user_condition": { "is_super_admin": true } }
+      }
     },
     "status": {
       "type": "string",
