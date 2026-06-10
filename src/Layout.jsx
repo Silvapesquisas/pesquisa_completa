@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
-  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2, BarChart2, Settings
+  LayoutDashboard, ClipboardList, FileText, Users, Map, Menu, X, Smartphone, LogOut, UserSquare2, Building2, BarChart2, Settings, ClipboardEdit
 } from "lucide-react";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ const navItems = [
   { label: "Rel. Avançado", page: "AdvancedReports", icon: BarChart2 },
   { label: "Usuários", page: "Users", icon: Users },
   { label: "Empresas", page: "Companies", icon: Building2 },
+  { label: "Auditoria", page: "AuditLog", icon: ClipboardEdit },
   { label: "Configurações", page: "Settings", icon: Settings },
 ];
 

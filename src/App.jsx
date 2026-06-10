@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import PageNotFound from './lib/PageNotFound';
 import Settings from './pages/Settings';
 import InterviewerDashboard from './pages/InterviewerDashboard';
+import AuditLog from './pages/AuditLog';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
@@ -102,6 +103,13 @@ const AuthenticatedApp = () => {
           <Route path="/InterviewerDashboard" element={
             <AnimatedRoute>
               <InterviewerDashboard />
+            </AnimatedRoute>
+          } />
+          <Route path="/AuditLog" element={
+            <AnimatedRoute>
+              <LayoutWrapper currentPageName="AuditLog">
+                <AuditLog />
+              </LayoutWrapper>
             </AnimatedRoute>
           } />
           <Route path="*" element={<PageNotFound />} />
