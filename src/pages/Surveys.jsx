@@ -34,7 +34,7 @@ export default function Surveys() {
     setSurveys(data);
     setLoading(false);
   };
-  useEffect(load, []);
+  useEffect(() => { load().catch(() => {}); }, []);
 
   const toggleStatus = async (s) => {
     const newStatus = s.status === "ativa" ? "pausada" : "ativa";

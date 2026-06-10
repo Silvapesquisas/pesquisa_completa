@@ -24,8 +24,9 @@ export default function Interviews() {
   const surveyIdParam = params.get("survey_id");
 
   useEffect(() => {
-    if (surveyIdParam) setFilterSurvey(surveyIdParam);
-    base44.auth.me().then(async (me) => {
+    const load = async () => {
+      if (surveyIdParam) setFilterSurvey(surveyIdParam);
+      const me = await base44.auth.me();
       const companyId = me?.company_id;
       const [iv, sv] = await Promise.all([
         companyId
@@ -38,7 +39,8 @@ export default function Interviews() {
       setInterviews(iv);
       setSurveys(sv);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    };
+    load().catch(() => setLoading(false));
   }, []);
 
   const filtered = interviews.filter(i => {
