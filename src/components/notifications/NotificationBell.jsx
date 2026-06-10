@@ -38,8 +38,9 @@ export default function NotificationBell({ user }) {
 
   // Real-time subscription
   useEffect(() => {
+    if (!user?.email) return;
     const result = base44.entities.Notification.subscribe((event) => {
-      if (event.data?.user_email === user?.email) {
+      if (event.data?.user_email === user.email) {
         load();
       }
     });
