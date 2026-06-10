@@ -19,13 +19,19 @@
         "entrevistador"
       ],
       "default": "entrevistador",
-      // A regra de update permite auto-edição ({"id": "{{user.id}}"}); sem esta
-      // proteção, um usuário comum poderia se autopromover a admin
       "rls": {
         "write": {
           "$or": [
-            { "user_condition": { "role": "admin" } },
-            { "user_condition": { "is_super_admin": true } }
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "is_super_admin": true
+              }
+            }
           ]
         }
       }
@@ -33,12 +39,19 @@
     "active": {
       "type": "boolean",
       "default": true,
-      // Aprovação/desativação é decisão do admin; usuário não reativa a si mesmo
       "rls": {
         "write": {
           "$or": [
-            { "user_condition": { "role": "admin" } },
-            { "user_condition": { "is_super_admin": true } }
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "is_super_admin": true
+              }
+            }
           ]
         }
       }
@@ -84,8 +97,8 @@
     }
   },
   "required": [
-    "email",
-    "full_name"
+    "full_name",
+    "email"
   ],
   "rls": {
     "create": {
@@ -96,10 +109,28 @@
     "read": {
       "$or": [
         {
-          "company_id": "{{user.company_id}}"
+          "id": "{{user.id}}"
         },
         {
-          "id": "{{user.id}}"
+          "$and": [
+            {
+              "company_id": "{{user.company_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "role": "admin"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "role": "supervisor"
+                  }
+                }
+              ]
+            }
+          ]
         },
         {
           "user_condition": {
