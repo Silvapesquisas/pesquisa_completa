@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,20 +11,23 @@ import { ptBR } from "date-fns/locale";
 // Interpolate color: blue → green → yellow → red
 function densityColor(ratio) {
   const stops = [
-    [0,   [59,  130, 246, 0.15]],  // blue low opacity
-    [0.2, [34,  197, 94,  0.45]],  // green
-    [0.5, [234, 179, 8,   0.65]],  // yellow
-    [0.8, [249, 115, 22,  0.80]],  // orange
-    [1.0, [239, 68,  68,  0.92]],  // red
+    [0,   [59,  130, 246, 0.15]],
+    [0.2, [34,  197, 94,  0.45]],
+    [0.5, [234, 179, 8,   0.65]],
+    [0.8, [249, 115, 22,  0.80]],
+    [1.0, [239, 68,  68,  0.92]],
   ];
   let lo = stops[0], hi = stops[stops.length - 1];
   for (let i = 0; i < stops.length - 1; i++) {
     if (ratio >= stops[i][0] && ratio <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
   }
   const t = hi[0] === lo[0] ? 0 : (ratio - lo[0]) / (hi[0] - lo[0]);
-  const lerp = (a, b) => Math.round(a + (b - a) * t);
-  const [r, g, b, a] = [0, 1, 2, 3].map(i => lo[1][i] + (hi[1][i] - lo[1][i]) * t);
-  return { color: `rgb(${lerp(lo[1][0], hi[1][0])},${lerp(lo[1][1], hi[1][1])},${lerp(lo[1][2], hi[1][2])})`, opacity: a };
+  const lerp = (x, y) => Math.round(x + (y - x) * t);
+  const opacity = lo[1][3] + (hi[1][3] - lo[1][3]) * t;
+  return {
+    color: `rgb(${lerp(lo[1][0], hi[1][0])},${lerp(lo[1][1], hi[1][1])},${lerp(lo[1][2], hi[1][2])})`,
+    opacity,
+  };
 }
 
 // Build grid cells from points
@@ -43,7 +46,7 @@ function buildGrid(points, cellSizeDeg = 0.008) {
 
 function FitBounds({ points }) {
   const map = useMap();
-  useMemo(() => {
+  useEffect(() => {
     if (points.length === 0) return;
     const lats = points.map(p => p.lat);
     const lngs = points.map(p => p.lng);
