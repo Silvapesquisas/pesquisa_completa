@@ -47,10 +47,28 @@ Deno.serve(async (req) => {
       if (iv.status === "concluida") counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1;
     }
 
+    // Cota mensal da empresa (definida pelo super-admin) para exibir no app
+    let companyMonthly = null;
+    const companies = await svc.entities.Company.filter({ id: fieldUser.company_id });
+    const monthlyLimit = Number(companies[0]?.max_interviews_per_month) || 0;
+    if (monthlyLimit > 0) {
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+      const companyInterviews = await svc.entities.Interview.filter({
+        company_id: fieldUser.company_id,
+        status: "concluida",
+      });
+      const used = companyInterviews.filter(
+        (iv) => (iv.completed_at || iv.created_date || "") >= monthStart,
+      ).length;
+      companyMonthly = { limit: monthlyLimit, used };
+    }
+
     return Response.json({
       fieldUser,
       surveys,
       counts,
+      companyMonthly,
       ...(body.withInterviews ? { myInterviews } : {}),
     });
   } catch (error) {

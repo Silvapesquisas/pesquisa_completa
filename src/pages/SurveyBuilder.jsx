@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -22,6 +22,15 @@ const QUESTION_TYPES = [
   { value: "escala", label: "Escala (1-5)" },
   { value: "sim_nao", label: "Sim / Não" },
 ];
+
+// Respostas possíveis (discretas) para regras de "pular para".
+// Tipos abertos/múltipla escolha não entram (resposta livre/combinada).
+function skipAnswerValues(q) {
+  if (q.type === "sim_nao") return ["Sim", "Não"];
+  if (q.type === "escala") return ["1", "2", "3", "4", "5"];
+  if (q.type === "unica_escolha") return (q.options || []).filter(Boolean);
+  return [];
+}
 
 function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, onMoveDown, index, total, dragHandleProps }) {
   const [expanded, setExpanded] = useState(true);
@@ -124,6 +133,47 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, on
               })()}
             </div>
           )}
+
+          {(() => {
+            const myPos = allQuestions.findIndex(q => q.id === question.id);
+            const laterQuestions = myPos >= 0 ? allQuestions.slice(myPos + 1) : [];
+            const values = skipAnswerValues(question);
+            if (values.length === 0 || laterQuestions.length === 0) return null;
+            const skipLogic = question.skip_logic || [];
+            const targetFor = (ans) => skipLogic.find(r => r.answer === ans)?.target || "__continue__";
+            const setTargetFor = (ans, target) => {
+              const rest = skipLogic.filter(r => r.answer !== ans);
+              const next = target === "__continue__" ? rest : [...rest, { answer: ans, target }];
+              onChange({ ...question, skip_logic: next });
+            };
+            return (
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <CornerDownRight className="w-3 h-3" /> Pular para (conforme a resposta)
+                </Label>
+                <div className="space-y-2">
+                  {values.map(val => (
+                    <div key={val} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-24 shrink-0 truncate" title={val}>Se "{val}":</span>
+                      <Select value={targetFor(val)} onValueChange={t => setTargetFor(val, t)}>
+                        <SelectTrigger className="text-sm flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__continue__">Continuar (próxima questão)</SelectItem>
+                          {laterQuestions.map((q, idx) => (
+                            <SelectItem key={q.id} value={q.id}>
+                              Q{myPos + 2 + idx}: {(q.text || "Sem texto").slice(0, 40)}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__end__">Finalizar entrevista</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">As questões entre esta e o destino são puladas quando a resposta corresponder.</p>
+              </div>
+            );
+          })()}
         </CardContent>
       )}
     </Card>
