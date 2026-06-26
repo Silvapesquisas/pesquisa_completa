@@ -102,8 +102,10 @@ function CodeLogin({ onLogin }) {
         setError("Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
       } else if (e?.status === 401 || e?.status === 400) {
         setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
+      } else if (e?.status === 404) {
+        setError("Função de login não publicada no servidor (404). O administrador precisa publicar as funções do app de campo.");
       } else {
-        setError("Erro ao verificar o código. Tente novamente.");
+        setError(`Erro ao verificar o código${e?.status ? ` (${e.status})` : ""}. ${e?.message || "Tente novamente."}`);
       }
     }
     setLoading(false);
