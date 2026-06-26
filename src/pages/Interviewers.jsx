@@ -12,11 +12,10 @@ import {
   ClipboardList, Phone, MapPin, BarChart2, Copy, KeyRound
 } from "lucide-react";
 
-const PLAN_LIMITS = { basico: 5, profissional: 20, enterprise: 999 };
-
-function generateCode() {
-  return Math.floor(10000000 + Math.random() * 90000000).toString();
-}
+// Limite de usuários externos por empresa: entre 4 e 25 (definido pelo super-admin)
+const MIN_FIELD_USERS = 4;
+const MAX_FIELD_USERS = 25;
+const clampFieldUsers = (n) => Math.min(Math.max(Math.floor(Number(n) || MIN_FIELD_USERS), MIN_FIELD_USERS), MAX_FIELD_USERS);
 
 export default function Interviewers() {
   const [fieldUsers, setFieldUsers] = useState([]);
@@ -68,9 +67,14 @@ export default function Interviewers() {
   useEffect(() => { load(); }, []);
 
   const isAdmin = currentUser?.role === "admin";
-  const maxInterviewers = company ? (company.max_interviewers || PLAN_LIMITS[company.plan] || 5) : 5;
+  const maxInterviewers = company ? clampFieldUsers(company.max_interviewers) : MIN_FIELD_USERS;
   const activeCount = fieldUsers.filter(u => u.active !== false).length;
   const canAddMore = activeCount < maxInterviewers;
+
+  // Uso de entrevistas no mês corrente (cota mensal definida pelo super-admin)
+  const monthlyLimit = Number(company?.max_interviews_per_month) || 0;
+  const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); })();
+  const monthlyUsed = interviews.filter(i => i.status === "concluida" && (i.completed_at || i.created_date || "") >= monthStart).length;
 
   const filtered = fieldUsers.filter(u => {
     const matchSearch = (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -89,23 +93,21 @@ export default function Interviewers() {
   const createUser = async () => {
     if (!newForm.name) return;
     if (!canAddMore) {
-      alert(`Limite de ${maxInterviewers} entrevistadores atingido.`);
+      alert(`Limite de ${maxInterviewers} usuários externos atingido para esta empresa.`);
       return;
     }
     setSaving(true);
-    const code = generateCode();
-    await base44.entities.FieldUser.create({
-      ...newForm,
-      access_code: code,
-      company_id: currentUser?.company_id || "",
-      company_name: company?.name || "",
-      active: true,
-      assigned_survey_ids: [],
-    });
+    try {
+      // Criação via função backend: o limite por empresa e a unicidade do
+      // código de acesso são garantidos no servidor
+      await base44.functions.invoke("createFieldUser", newForm);
+      setFormOpen(false);
+      setNewForm({ name: "", role: "entrevistador", region: "", phone: "", notes: "" });
+      load();
+    } catch (e) {
+      alert(e?.message || "Não foi possível cadastrar o entrevistador. Tente novamente.");
+    }
     setSaving(false);
-    setFormOpen(false);
-    setNewForm({ name: "", role: "entrevistador", region: "", phone: "", notes: "" });
-    load();
   };
 
   const openEdit = (u) => {
@@ -167,9 +169,15 @@ export default function Interviewers() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Entrevistadores</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {activeCount} ativos · Limite: {maxInterviewers}
+            {activeCount} ativos · Limite: {maxInterviewers} usuários externos
             {company && <span className="ml-2 text-xs text-blue-500 capitalize">Plano {company.plan}</span>}
           </p>
+          {monthlyLimit > 0 && (
+            <p className={`text-xs mt-1 ${monthlyUsed >= monthlyLimit ? "text-red-500 font-medium" : "text-gray-400"}`}>
+              Entrevistas neste mês: {monthlyUsed}/{monthlyLimit}
+              {monthlyUsed >= monthlyLimit && " · limite mensal atingido"}
+            </p>
+          )}
         </div>
         {isAdmin && (
           <Button

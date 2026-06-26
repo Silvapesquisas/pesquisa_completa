@@ -61,6 +61,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Limite mensal de entrevistas da empresa (definido pelo super-admin).
+    // Vazio/0 = ilimitado. Conta apenas entrevistas concluídas no mês corrente.
+    const companies = await svc.entities.Company.filter({ id: fieldUser.company_id });
+    const company = companies[0];
+    const monthlyLimit = Number(company?.max_interviews_per_month) || 0;
+    if (monthlyLimit > 0) {
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+      const companyInterviews = await svc.entities.Interview.filter({
+        company_id: fieldUser.company_id,
+        status: "concluida",
+      });
+      const usedThisMonth = companyInterviews.filter(
+        (iv) => (iv.completed_at || iv.created_date || "") >= monthStart,
+      ).length;
+      if (usedThisMonth >= monthlyLimit) {
+        return Response.json(
+          { error: `Limite mensal de ${monthlyLimit} entrevistas da empresa foi atingido. Fale com o administrador.` },
+          { status: 409 },
+        );
+      }
+    }
+
     // Áudio gravado no aparelho: sobe pelo servidor (cliente anônimo não tem
     // acesso direto às integrações)
     let audioUrl = null;

@@ -78,6 +78,23 @@
           },
           "depends_on_answer": {
             "type": "string"
+          },
+          "skip_logic": {
+            "type": "array",
+            "description": "Regras de salto: conforme a resposta, pula direto para outra questão (ou finaliza). Ex.: resposta 'Não' -> ir para questão X.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string",
+                  "description": "Valor da resposta que dispara o salto"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "ID da questão de destino, ou '__end__' para finalizar a entrevista"
+                }
+              }
+            }
           }
         }
       }

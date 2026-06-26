@@ -169,6 +169,7 @@ export default function FieldApp() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
+  const [companyMonthly, setCompanyMonthly] = useState(null); // { limit, used } cota mensal da empresa
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
@@ -204,6 +205,7 @@ export default function FieldApp() {
       setFieldUser(res.fieldUser);
       setOnlineSurveys(res.surveys || []);
       setMyInterviewCounts(res.counts || {});
+      setCompanyMonthly(res.companyMonthly || null);
     } catch {
       // silently fail
     }
@@ -348,12 +350,40 @@ export default function FieldApp() {
 
   const stopRecording = () => { mediaRecorder.current?.stop(); setRecording(false); };
 
-  const visibleQuestions = (selectedSurvey?.questions || []).filter(q => {
+  // 1) Filtra por dependência condicional (depends_on)
+  const baseVisible = (selectedSurvey?.questions || []).filter(q => {
     if (!q.depends_on_question_id) return true;
     const depAnswer = answers[q.depends_on_question_id];
     if (!depAnswer) return false;
     return !q.depends_on_answer || depAnswer === q.depends_on_answer || depAnswer.split("|").includes(q.depends_on_answer);
   });
+
+  // 2) Aplica o "pular para" (skip_logic): segue as regras de salto a partir da
+  // primeira questão, montando o caminho efetivo conforme as respostas dadas.
+  // Saltos são sempre para frente, então não há risco de loop.
+  const visibleQuestions = (() => {
+    if (baseVisible.length === 0) return [];
+    const indexById = {};
+    baseVisible.forEach((q, i) => { indexById[q.id] = i; });
+    const path = [];
+    let i = 0;
+    while (i >= 0 && i < baseVisible.length) {
+      const q = baseVisible[i];
+      path.push(q);
+      const ans = answers[q.id];
+      let next = i + 1;
+      if (ans && Array.isArray(q.skip_logic) && q.skip_logic.length > 0) {
+        const selected = typeof ans === "string" ? ans.split("|") : [ans];
+        const rule = q.skip_logic.find(r => selected.includes(r.answer));
+        if (rule) {
+          if (rule.target === "__end__") next = baseVisible.length;
+          else if (indexById[rule.target] != null && indexById[rule.target] > i) next = indexById[rule.target];
+        }
+      }
+      i = next;
+    }
+    return path;
+  })();
 
   const currentQuestion = visibleQuestions[currentIndex];
 
@@ -481,6 +511,14 @@ export default function FieldApp() {
     }, 30000);
     return () => clearInterval(autoSaveTimer.current);
   }, [step, saveDraft]);
+
+  // Se uma regra de salto encurtar o caminho abaixo do índice atual
+  // (ex.: voltar e mudar a resposta), mantém o índice dentro dos limites.
+  useEffect(() => {
+    if (step === "interview" && visibleQuestions.length > 0 && currentIndex > visibleQuestions.length - 1) {
+      setCurrentIndex(visibleQuestions.length - 1);
+    }
+  }, [step, currentIndex, visibleQuestions.length]);
 
   const resetInterview = () => {
     stopLocationCapture();
@@ -748,6 +786,18 @@ export default function FieldApp() {
           lastSynced={lastSynced} onSync={syncDrafts}
           syncLogs={syncLogs} onClearLogs={clearLogs}
         />
+
+        {companyMonthly && (
+          <div className={`rounded-xl px-4 py-2.5 text-sm border ${
+            companyMonthly.used >= companyMonthly.limit
+              ? "bg-red-50 border-red-200 text-red-700"
+              : "bg-blue-50 border-blue-100 text-blue-700"
+          }`}>
+            {companyMonthly.used >= companyMonthly.limit
+              ? `Cota mensal da empresa atingida (${companyMonthly.used}/${companyMonthly.limit}). Novas entrevistas só no próximo mês ou após o administrador aumentar o limite.`
+              : `Entrevistas da empresa neste mês: ${companyMonthly.used}/${companyMonthly.limit}.`}
+          </div>
+        )}
 
         <div id="drafts-section">
           <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} />

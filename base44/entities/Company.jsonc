@@ -23,7 +23,19 @@
     "max_interviewers": {
       "type": "number",
       "default": 5,
-      "description": "Limite de entrevistadores"
+      "description": "Limite de usuários externos (entrevistadores do App de Campo). Entre 4 e 25.",
+      // Apenas o super-admin define o limite de usuários externos. Sem esta
+      // proteção, um admin de empresa poderia elevar o próprio limite.
+      "rls": {
+        "write": { "user_condition": { "is_super_admin": true } }
+      }
+    },
+    "max_interviews_per_month": {
+      "type": "number",
+      "description": "Limite de entrevistas por mês para a empresa. Vazio/0 = ilimitado. Definido pelo super-admin.",
+      "rls": {
+        "write": { "user_condition": { "is_super_admin": true } }
+      }
     },
     "active": {
       "type": "boolean",

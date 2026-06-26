@@ -7,12 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Building2, Plus, Pencil, Users, Shield } from "lucide-react";
+import { Building2, Plus, Pencil, Users, Shield, CalendarClock } from "lucide-react";
+
+// Limite de usuários externos (entrevistadores do App de Campo): entre 4 e 25
+const MIN_FIELD_USERS = 4;
+const MAX_FIELD_USERS = 25;
+const clampFieldUsers = (n) => Math.min(Math.max(Math.floor(Number(n) || MIN_FIELD_USERS), MIN_FIELD_USERS), MAX_FIELD_USERS);
 
 const PLANS = [
   { value: "basico", label: "Básico", limit: 5 },
-  { value: "profissional", label: "Profissional", limit: 20 },
-  { value: "enterprise", label: "Enterprise", limit: 999 },
+  { value: "profissional", label: "Profissional", limit: 15 },
+  { value: "enterprise", label: "Enterprise", limit: 25 },
 ];
 
 export default function Companies() {
@@ -22,7 +27,7 @@ export default function Companies() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, phone: "", cnpj: "" });
+  const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -40,27 +45,47 @@ export default function Companies() {
   useEffect(() => { load(); }, []);
 
   const isAdmin = currentUser?.role === "admin";
+  // Apenas o super-admin define os limites (usuários externos e entrevistas/mês)
+  const isSuperAdmin = currentUser?.is_super_admin === true || (isAdmin && !currentUser?.company_id);
 
   const openNew = () => {
     setEditTarget(null);
-    setForm({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, phone: "", cnpj: "" });
+    setForm({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
     setFormOpen(true);
   };
 
   const openEdit = (co) => {
     setEditTarget(co);
-    setForm({ name: co.name, owner_email: co.owner_email, plan: co.plan || "basico", max_interviewers: co.max_interviewers || 5, phone: co.phone || "", cnpj: co.cnpj || "" });
+    setForm({
+      name: co.name, owner_email: co.owner_email, plan: co.plan || "basico",
+      max_interviewers: co.max_interviewers || MIN_FIELD_USERS,
+      max_interviews_per_month: co.max_interviews_per_month ?? "",
+      phone: co.phone || "", cnpj: co.cnpj || "",
+    });
     setFormOpen(true);
   };
 
   const save = async () => {
     setSaving(true);
-    const planObj = PLANS.find(p => p.value === form.plan);
-    const data = { ...form, max_interviewers: Number(form.max_interviewers) || planObj?.limit || 5 };
-    if (editTarget) {
-      await base44.entities.Company.update(editTarget.id, data);
-    } else {
-      await base44.entities.Company.create(data);
+    // Campos básicos que qualquer admin da empresa pode editar
+    const data = { name: form.name, owner_email: form.owner_email, plan: form.plan, phone: form.phone, cnpj: form.cnpj };
+    // Limites só são enviados pelo super-admin (e protegidos por RLS no servidor)
+    if (isSuperAdmin) {
+      data.max_interviewers = clampFieldUsers(form.max_interviewers);
+      data.max_interviews_per_month = (form.max_interviews_per_month === "" || form.max_interviews_per_month == null)
+        ? null
+        : Math.max(Math.floor(Number(form.max_interviews_per_month)) || 0, 0);
+    }
+    try {
+      if (editTarget) {
+        await base44.entities.Company.update(editTarget.id, data);
+      } else {
+        await base44.entities.Company.create(data);
+      }
+    } catch (e) {
+      alert("Erro ao salvar empresa: " + (e?.message || "tente novamente."));
+      setSaving(false);
+      return;
     }
     setSaving(false);
     setFormOpen(false);
@@ -126,9 +151,13 @@ export default function Companies() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-4 text-xs text-gray-500 mb-2">
-                  <span className="flex items-center gap-1"><Users className="w-3 h-3" />{getUserCount(co)} usuários</span>
-                  <span className="flex items-center gap-1"><Shield className="w-3 h-3" />Limite: {co.max_interviewers} entrevistadores</span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3" />{getUserCount(co)} gestores</span>
+                  <span className="flex items-center gap-1"><Shield className="w-3 h-3" />Até {co.max_interviewers || MIN_FIELD_USERS} usuários externos</span>
+                  <span className="flex items-center gap-1">
+                    <CalendarClock className="w-3 h-3" />
+                    {co.max_interviews_per_month ? `${co.max_interviews_per_month} entrevistas/mês` : "Entrevistas/mês: ilimitado"}
+                  </span>
                 </div>
                 {co.phone && <p className="text-xs text-gray-400">Tel: {co.phone}</p>}
                 {co.cnpj && <p className="text-xs text-gray-400">CNPJ: {co.cnpj}</p>}
@@ -178,19 +207,44 @@ export default function Companies() {
                 <Label className="text-xs text-gray-500 mb-1 block">Plano</Label>
                 <Select value={form.plan} onValueChange={v => {
                   const p = PLANS.find(pl => pl.value === v);
-                  setForm(prev => ({ ...prev, plan: v, max_interviewers: p?.limit || 5 }));
+                  setForm(prev => ({ ...prev, plan: v, max_interviewers: clampFieldUsers(p?.limit || MIN_FIELD_USERS) }));
                 }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PLANS.map(p => <SelectItem key={p.value} value={p.value}>{p.label} (até {p.limit === 999 ? "∞" : p.limit})</SelectItem>)}
+                    {PLANS.map(p => <SelectItem key={p.value} value={p.value}>{p.label} (até {p.limit})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-gray-500 mb-1 block">Limite de Entrevistadores</Label>
-                <Input type="number" value={form.max_interviewers} onChange={e => setForm(p => ({ ...p, max_interviewers: e.target.value }))} min={1} />
+                <Label className="text-xs text-gray-500 mb-1 block">Usuários externos (App de Campo)</Label>
+                <Input
+                  type="number"
+                  value={form.max_interviewers}
+                  onChange={e => setForm(p => ({ ...p, max_interviewers: e.target.value }))}
+                  min={MIN_FIELD_USERS}
+                  max={MAX_FIELD_USERS}
+                  disabled={!isSuperAdmin}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Entre {MIN_FIELD_USERS} e {MAX_FIELD_USERS}.</p>
               </div>
             </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Limite de entrevistas por mês</Label>
+              <Input
+                type="number"
+                value={form.max_interviews_per_month}
+                onChange={e => setForm(p => ({ ...p, max_interviews_per_month: e.target.value }))}
+                min={0}
+                placeholder="Vazio = ilimitado"
+                disabled={!isSuperAdmin}
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Deixe em branco para não limitar. Você define a quantidade máxima.</p>
+            </div>
+            {!isSuperAdmin && (
+              <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                Apenas o super-admin da plataforma pode alterar os limites de usuários externos e de entrevistas por mês.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Telefone</Label>
