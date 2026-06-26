@@ -58,18 +58,17 @@ export default function Users() {
   const invite = async () => {
     if (!inviteEmail) return;
     setInviting(true);
-    await base44.users.inviteUser(inviteEmail, inviteRole === "admin" ? "admin" : "user");
-    // After invite, tag the new user with company_id if known
-    if (currentUser?.company_id) {
-      // Best-effort: find newly created user and stamp company_id
-      setTimeout(async () => {
-        const all = await base44.entities.User.filter({ email: inviteEmail });
-        if (all[0]) await base44.entities.User.update(all[0].id, { company_id: currentUser.company_id });
-      }, 2000);
+    try {
+      // A função backend cria o convite no Auth e já vincula o usuário à
+      // empresa do convidante com o papel escolhido (admin/supervisor)
+      await base44.users.inviteUser(inviteEmail, inviteRole);
+      setInviteOpen(false);
+      setInviteEmail("");
+      load();
+    } catch (e) {
+      alert(e?.message || "Falha ao convidar usuário.");
     }
     setInviting(false);
-    setInviteOpen(false);
-    setInviteEmail("");
   };
 
   const filtered = users.filter(u =>
