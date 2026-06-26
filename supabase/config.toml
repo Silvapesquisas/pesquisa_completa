@@ -1,0 +1,13 @@
+project_id = "entrevista-pro"
+
+# As funções do App de Campo são chamadas por entrevistadores anônimos
+# (sem conta), por isso não exigem JWT de usuário. Elas validam o código
+# de acesso internamente.
+[functions.fieldLogin]
+verify_jwt = false
+
+[functions.fieldSubmitInterview]
+verify_jwt = false
+
+# As demais exigem usuário autenticado do painel (verify_jwt = true, padrão):
+# createFieldUser, inviteUser, invokeLLM

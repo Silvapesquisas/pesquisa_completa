@@ -10,6 +10,10 @@ import InterviewerDashboard from './pages/InterviewerDashboard';
 import AuditLog from './pages/AuditLog';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import Login from './pages/Login';
+
+// Rotas públicas: app dos entrevistadores (login por código, sem conta Supabase)
+const PUBLIC_PATHS = ["/FieldApp", "/InterviewerDashboard"];
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -48,26 +52,25 @@ const AnimatedRoute = ({ children }) => (
 );
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
   const location = useLocation();
 
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  const isPublic = PUBLIC_PATHS.includes(location.pathname);
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
+  // Rotas públicas (app de campo) renderizam sem exigir sessão do painel
+  if (!isPublic) {
+    // Show loading spinner while checking auth
+    if (isLoadingPublicSettings || isLoadingAuth) {
+      return (
+        <div className="fixed inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    // Sem sessão -> tela de login (e-mail/senha)
+    if (authError) {
+      if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
+      if (authError.type === 'auth_required') return <Login />;
     }
   }
 
