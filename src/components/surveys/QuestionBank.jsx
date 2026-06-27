@@ -81,6 +81,47 @@ const QUESTION_BANK = {
       { type: "escala", text: "Como avalia a qualidade de vida na zona rural atualmente?", required: true, options: [] },
     ]
   },
+  mercado_viabilidade: {
+    label: "Pesquisa Mercadológica - Viabilidade de Novo Negócio",
+    category: "mercado",
+    questions: [
+      { type: "unica_escolha", text: "Qual a sua faixa etária?", required: true, options: ["16 a 17 anos", "18 a 24 anos", "25 a 34 anos", "35 a 44 anos", "45 a 59 anos", "60 anos ou mais"] },
+      { type: "unica_escolha", text: "Qual o seu sexo?", required: true, options: ["Masculino", "Feminino"] },
+      { type: "unica_escolha", text: "Qual a renda mensal da sua família?", required: false, options: ["Até 1 salário mínimo", "1 a 2 salários mínimos", "2 a 5 salários mínimos", "5 a 10 salários mínimos", "Mais de 10 salários mínimos", "Prefiro não responder"] },
+      { type: "aberta", text: "Em qual bairro ou localidade o(a) Sr(a) reside?", required: true, options: [] },
+      { type: "unica_escolha", text: "Com que frequência o(a) Sr(a) costuma comprar ou contratar este tipo de produto/serviço?", required: true, options: ["Diariamente", "Semanalmente", "Quinzenalmente", "Mensalmente", "Raramente", "Nunca"] },
+      { type: "aberta", text: "Atualmente, onde o(a) Sr(a) costuma comprar/contratar este tipo de produto/serviço?", required: false, options: [] },
+      { type: "unica_escolha", text: "Em média, quanto o(a) Sr(a) gasta por mês com este tipo de produto/serviço?", required: false, options: ["Até R$ 50", "R$ 51 a R$ 150", "R$ 151 a R$ 300", "R$ 301 a R$ 500", "R$ 501 a R$ 1.000", "Mais de R$ 1.000"] },
+      { type: "multipla_escolha", text: "O que mais pesa na sua decisão na hora de escolher onde comprar/contratar?", required: true, options: ["Preço", "Qualidade", "Atendimento", "Localização/proximidade", "Variedade de produtos", "Marca/reputação", "Formas de pagamento"] },
+      { type: "sim_nao", text: "Na sua opinião, falta na sua região um estabelecimento deste ramo?", required: true, options: [] },
+      { type: "escala", text: "Qual seria o seu interesse em um novo estabelecimento deste ramo abrindo na sua região?", required: true, options: [] },
+      { type: "unica_escolha", text: "Quanto o(a) Sr(a) estaria disposto(a) a pagar pelo produto/serviço principal deste negócio?", required: false, options: ["Bem abaixo da média do mercado", "Um pouco abaixo da média", "Na média do mercado", "Um pouco acima, se houver mais qualidade", "Não sei avaliar"] },
+      { type: "unica_escolha", text: "Como o(a) Sr(a) prefere comprar ou ser atendido(a)?", required: false, options: ["Loja física", "Site/aplicativo", "Delivery / WhatsApp", "Tanto faz"] },
+      { type: "escala", text: "Se um novo negócio deste ramo abrisse perto da sua casa, qual a chance de o(a) Sr(a) experimentar?", required: true, options: [] },
+      { type: "aberta", text: "O que o(a) Sr(a) mais valorizaria em um novo negócio deste ramo?", required: false, options: [] },
+    ]
+  },
+  mercado_participacao: {
+    label: "Pesquisa Mercadológica - Participação de Mercado",
+    category: "mercado",
+    questions: [
+      { type: "unica_escolha", text: "Qual a sua faixa etária?", required: true, options: ["16 a 17 anos", "18 a 24 anos", "25 a 34 anos", "35 a 44 anos", "45 a 59 anos", "60 anos ou mais"] },
+      { type: "unica_escolha", text: "Qual o seu sexo?", required: true, options: ["Masculino", "Feminino"] },
+      { type: "aberta", text: "Em qual bairro ou localidade o(a) Sr(a) reside?", required: true, options: [] },
+      { type: "sim_nao", text: "O(a) Sr(a) costuma comprar ou utilizar este tipo de produto/serviço?", required: true, options: [] },
+      { type: "unica_escolha", text: "Com que frequência o(a) Sr(a) compra ou utiliza este tipo de produto/serviço?", required: false, options: ["Diariamente", "Semanalmente", "Quinzenalmente", "Mensalmente", "Raramente"] },
+      { type: "aberta", text: "Quais marcas ou empresas deste ramo o(a) Sr(a) conhece na sua região? (cite as que lembrar)", required: false, options: [] },
+      { type: "aberta", text: "Qual marca ou empresa deste ramo o(a) Sr(a) MAIS utiliza atualmente?", required: true, options: [] },
+      { type: "unica_escolha", text: "Há quanto tempo o(a) Sr(a) é cliente dessa empresa?", required: false, options: ["Menos de 6 meses", "6 meses a 1 ano", "1 a 3 anos", "Mais de 3 anos"] },
+      { type: "multipla_escolha", text: "Por que o(a) Sr(a) escolheu essa empresa?", required: false, options: ["Preço", "Qualidade", "Atendimento", "Localização/proximidade", "Tradição/confiança", "Indicação de conhecidos", "Variedade", "Promoções"] },
+      { type: "escala", text: "Como o(a) Sr(a) avalia a empresa que mais utiliza?", required: true, options: [] },
+      { type: "sim_nao", text: "O(a) Sr(a) conhece ou já ouviu falar da nossa empresa? (informe o nome ao entrevistado)", required: true, options: [] },
+      { type: "unica_escolha", text: "Qual é a sua relação com a nossa empresa?", required: false, options: ["Sou cliente atualmente", "Já fui cliente, mas não sou mais", "Conheço, mas nunca utilizei", "Não conhecia até agora"] },
+      { type: "escala", text: "Qual a chance de o(a) Sr(a) recomendar a empresa que utiliza a um amigo ou familiar?", required: true, options: [] },
+      { type: "aberta", text: "O que faria o(a) Sr(a) trocar de marca ou empresa neste ramo?", required: false, options: [] },
+      { type: "aberta", text: "O(a) Sr(a) tem alguma sugestão ou crítica para as empresas deste ramo?", required: false, options: [] },
+    ]
+  },
 };
 
 export default function QuestionBank({ surveyCategory, onLoadQuestions, onClose }) {
