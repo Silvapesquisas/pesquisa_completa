@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,28 +191,76 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
   );
 }
 
+const EMPTY_SURVEY = {
+  title: "", description: "", category: "urbano", status: "rascunho",
+  questions: [], target_interviews: "", start_date: "", end_date: ""
+};
+
 export default function SurveyBuilder() {
   const navigate = useNavigate();
-  const params = new URLSearchParams(window.location.search);
-  const editId = params.get("id");
+  const [editId, setEditId] = useState(() => new URLSearchParams(window.location.search).get("id"));
 
-  const [survey, setSurvey] = useState({
-    title: "", description: "", category: "urbano", status: "rascunho",
-    questions: [], target_interviews: "", start_date: "", end_date: ""
-  });
+  const [survey, setSurvey] = useState(EMPTY_SURVEY);
   const [saving, setSaving] = useState(false);
   const [showBank, setShowBank] = useState(false);
 
+  const draftKey = `sb_draft_${editId || "new"}`;
+  const readyRef = useRef(false);   // libera o autosave só após o carregamento inicial
+  const savedRef = useRef(null);    // snapshot serializado do que já está salvo no banco
+  const loadedRef = useRef(false);  // garante que o carregamento inicial rode uma única vez
+
+  // Carregamento inicial + recuperação de rascunho local (não perde trabalho ao
+  // atualizar/sair da página sem salvar).
   useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+
+    let draft = null;
+    try { const raw = localStorage.getItem(draftKey); if (raw) draft = JSON.parse(raw); } catch { /* ignore */ }
+
+    const finish = (base) => {
+      const baseSurvey = base || EMPTY_SURVEY;
+      if (draft && JSON.stringify(draft) !== JSON.stringify(baseSurvey)
+          && confirm("Há alterações não salvas desta pesquisa neste navegador. Deseja recuperá-las?")) {
+        setSurvey(draft);
+      } else {
+        setSurvey(baseSurvey);
+        try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      }
+      savedRef.current = JSON.stringify(baseSurvey);
+      readyRef.current = true;
+    };
+
     if (editId) {
       // Busca apenas o registro pedido; o RLS no servidor garante que só
       // pesquisas da empresa do usuário sejam retornadas
       base44.entities.Survey.filter({ id: editId }).then(list => {
         const found = list[0];
-        if (found) setSurvey({ ...found, questions: found.questions || [] });
-      }).catch(() => {});
+        finish(found ? { ...found, questions: found.questions || [] } : null);
+      }).catch(() => finish(null));
+    } else {
+      finish(null);
     }
-  }, [editId]);
+  }, [editId, draftKey]);
+
+  // Salva o rascunho automaticamente no navegador sempre que há alteração não salva.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    if (JSON.stringify(survey) === savedRef.current) return; // nada mudou desde o último salvamento
+    const isEmpty = !survey.title?.trim() && (!survey.questions || survey.questions.length === 0);
+    if (isEmpty) return;
+    try { localStorage.setItem(draftKey, JSON.stringify(survey)); } catch { /* ignore */ }
+  }, [survey, draftKey]);
+
+  // Avisa ao fechar/atualizar a aba se houver alterações não salvas no banco.
+  useEffect(() => {
+    const handler = (e) => {
+      if (!readyRef.current) return;
+      if (JSON.stringify(survey) !== savedRef.current) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [survey]);
 
   const addQuestion = () => {
     const q = { id: uuidv4(), order: survey.questions.length, type: "aberta", text: "", required: false, options: [] };
@@ -259,27 +307,46 @@ export default function SurveyBuilder() {
     setSurvey(s => ({ ...s, questions: qs.map((q, i) => ({ ...q, order: i })) }));
   };
 
-  const save = async () => {
+  const save = async (stay = false) => {
     if (!survey.title.trim()) { alert("Informe o título da pesquisa."); return; }
     setSaving(true);
-    const me = await base44.auth.me();
-    const payload = {
-      ...survey,
-      company_id: survey.company_id || me?.company_id || "",
-      target_interviews: survey.target_interviews !== "" && survey.target_interviews != null
-        ? Number(survey.target_interviews)
-        : undefined,
-      max_interviews_per_interviewer: survey.max_interviews_per_interviewer !== "" && survey.max_interviews_per_interviewer != null
-        ? Number(survey.max_interviews_per_interviewer)
-        : undefined,
-    };
-    if (editId) {
-      await base44.entities.Survey.update(editId, payload);
-    } else {
-      await base44.entities.Survey.create(payload);
+    try {
+      const me = await base44.auth.me();
+      const payload = {
+        ...survey,
+        company_id: survey.company_id || me?.company_id || "",
+        target_interviews: survey.target_interviews !== "" && survey.target_interviews != null
+          ? Number(survey.target_interviews)
+          : undefined,
+        max_interviews_per_interviewer: survey.max_interviews_per_interviewer !== "" && survey.max_interviews_per_interviewer != null
+          ? Number(survey.max_interviews_per_interviewer)
+          : undefined,
+      };
+      let savedId = editId;
+      if (editId) {
+        await base44.entities.Survey.update(editId, payload);
+      } else {
+        const created = await base44.entities.Survey.create(payload);
+        savedId = created?.id || null;
+      }
+      savedRef.current = JSON.stringify(survey);
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      setSaving(false);
+      if (stay) {
+        // Mantém na página; se era nova, passa a editar o registro recém-criado
+        // (inclui o id na URL para sobreviver a um refresh).
+        if (!editId && savedId) {
+          setEditId(savedId);
+          window.history.replaceState({}, "", createPageUrl(`SurveyBuilder?id=${savedId}`));
+        }
+        alert("Pesquisa salva.");
+      } else {
+        navigate(createPageUrl("Surveys"));
+      }
+    } catch (e) {
+      setSaving(false);
+      alert(`Erro ao salvar: ${e?.message || "tente novamente."}`);
     }
-    setSaving(false);
-    navigate(createPageUrl("Surveys"));
   };
 
   return (
@@ -288,7 +355,10 @@ export default function SurveyBuilder() {
         <Button variant="ghost" size="sm" onClick={() => navigate(createPageUrl("Surveys"))}>
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
-        <h1 className="text-xl font-bold text-gray-900">{editId ? "Editar Pesquisa" : "Nova Pesquisa"}</h1>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">{editId ? "Editar Pesquisa" : "Nova Pesquisa"}</h1>
+          <p className="text-[11px] text-gray-400">Suas alterações ficam guardadas neste navegador até você clicar em Salvar.</p>
+        </div>
       </div>
 
       <Card className="border-0 shadow-sm">
@@ -416,10 +486,13 @@ export default function SurveyBuilder() {
         )}
       </div>
 
-      <div className="flex justify-end gap-3 pb-10">
-        <Button variant="outline" onClick={() => navigate(createPageUrl("Surveys"))}>Cancelar</Button>
-        <Button onClick={save} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-          <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando..." : "Salvar Pesquisa"}
+      <div className="flex flex-wrap justify-end gap-3 pb-10">
+        <Button variant="outline" onClick={() => { try { localStorage.removeItem(draftKey); } catch { /* ignore */ } navigate(createPageUrl("Surveys")); }}>Cancelar</Button>
+        <Button variant="outline" onClick={() => save(true)} disabled={saving} className="border-blue-200 text-blue-600 hover:bg-blue-50">
+          <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando..." : "Salvar"}
+        </Button>
+        <Button onClick={() => save(false)} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+          <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando..." : "Salvar e sair"}
         </Button>
       </div>
     </div>
