@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight, Copy } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -32,7 +32,7 @@ function skipAnswerValues(q) {
   return [];
 }
 
-function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, onMoveDown, index, total, dragHandleProps }) {
+function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate, onMoveUp, onMoveDown, index, total, dragHandleProps }) {
   const [expanded, setExpanded] = useState(true);
   const hasOptions = ["multipla_escolha", "unica_escolha"].includes(question.type);
 
@@ -57,6 +57,7 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, on
             <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
+            <Button size="sm" variant="ghost" onClick={onDuplicate} title="Clonar questão"><Copy className="w-4 h-4 text-gray-400" /></Button>
             <Button size="sm" variant="ghost" onClick={onDelete}><Trash2 className="w-4 h-4 text-red-400" /></Button>
           </div>
         </div>
@@ -226,6 +227,22 @@ export default function SurveyBuilder() {
     setSurvey(s => ({ ...s, questions: s.questions.filter(q => q.id !== id) }));
   };
 
+  const duplicateQuestion = (index) => {
+    setSurvey(s => {
+      const original = s.questions[index];
+      if (!original) return s;
+      const clone = {
+        ...original,
+        id: uuidv4(),
+        options: [...(original.options || [])],
+        skip_logic: (original.skip_logic || []).map(r => ({ ...r })),
+      };
+      const qs = [...s.questions];
+      qs.splice(index + 1, 0, clone);
+      return { ...s, questions: qs.map((q, i) => ({ ...q, order: i })) };
+    });
+  };
+
   const moveQuestion = (index, dir) => {
     const qs = [...survey.questions];
     const target = index + dir;
@@ -371,6 +388,7 @@ export default function SurveyBuilder() {
                           allQuestions={survey.questions}
                           onChange={updated => updateQuestion(q.id, updated)}
                           onDelete={() => deleteQuestion(q.id)}
+                          onDuplicate={() => duplicateQuestion(i)}
                           onMoveUp={() => moveQuestion(i, -1)}
                           onMoveDown={() => moveQuestion(i, 1)}
                           index={i}
