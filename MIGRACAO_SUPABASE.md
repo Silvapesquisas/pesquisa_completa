@@ -99,4 +99,6 @@ Pronto: esse usuário enxerga e gerencia tudo (todas as empresas).
 
 - O `@/api/base44Client` foi mantido só como nome — por baixo é Supabase.
   Se quiser, dá para renomear no futuro.
-- `src/lib/app-params.js` ficou órfão (era do Base44) e pode ser removido.
+- A migration `0003_security_hardening.sql` move os helpers de RLS para um
+  schema `private` (fora da API) e revoga `EXECUTE` das funções de trigger,
+  zerando os avisos do linter de segurança do Supabase.

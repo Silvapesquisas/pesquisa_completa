@@ -1,39 +1,53 @@
-**Welcome to your Base44 project** 
+# Pesquisa Completa
 
-**About**
+Plataforma de pesquisas de campo (multiempresa) com painel web de gestão e
+app de campo para entrevistadores. Stack própria: **Supabase** (Postgres +
+Auth + Edge Functions + Storage) no backend e **Vercel** (Vite + React) no
+frontend.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Funcionalidades
 
-This project contains everything you need to run your app locally.
+- **Painel** (super-admin / admin / supervisor / entrevistador): empresas,
+  usuários, construtor de pesquisas (com banco de questões pronto, lógica de
+  pular e questões condicionais), entrevistadores de campo, relatórios,
+  mapas/heatmap e insights por IA.
+- **App de campo** (`/FieldApp`): login por código de 8 dígitos, coleta
+  offline com sincronização, GPS e áudio.
+- **Isolamento por empresa** garantido por RLS no Postgres; o super-admin
+  enxerga tudo. Entrevistadores de campo são anônimos e só acessam o backend
+  pelas Edge Functions.
 
-**Edit the code in your local development environment**
+## Rodando localmente
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
-
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+```bash
+npm install
+npm run dev
 ```
 
-Run the app: `npm run dev`
+Crie um arquivo `.env.local` na raiz com as variáveis do front:
 
-**Publish your changes**
+```
+VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_anon_key
+```
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+Scripts: `npm run dev` (dev), `npm run build` (build de produção),
+`npm run preview`, `npm run lint`.
 
-**Docs & Support**
+## Estrutura
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+- `src/pages/` — telas do painel e o app de campo (`FieldApp.jsx`)
+- `src/components/` — componentes (UI, dashboard, relatórios, app de campo…)
+- `src/api/supabaseClient.js` — cliente Supabase
+- `src/api/base44Client.js` — camada de compatibilidade sobre o Supabase
+  (mantém a API `base44.entities/auth/functions/integrations` usada pelas telas)
+- `supabase/migrations/` — schema, RLS e hardening de segurança
+- `supabase/functions/` — Edge Functions (login/envio do app de campo, etc.)
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+## Backend (Supabase) e deploy (Vercel)
+
+O passo a passo completo de criação do projeto Supabase, aplicação das
+migrations e RLS, publicação das Edge Functions, criação do primeiro
+super-admin e deploy na Vercel está em **[MIGRACAO_SUPABASE.md](./MIGRACAO_SUPABASE.md)**.
+
+Segurança: veja **[SECURITY.md](./SECURITY.md)**.
