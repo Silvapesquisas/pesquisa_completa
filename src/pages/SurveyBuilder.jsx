@@ -104,6 +104,16 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onMoveUp, on
             </div>
           )}
 
+          {hasOptions && (
+            <div className="flex items-start gap-2 bg-gray-50 rounded-lg p-3">
+              <Switch checked={question.allow_other || false} onCheckedChange={val => onChange({ ...question, allow_other: val })} className="mt-0.5" />
+              <div>
+                <Label className="text-xs text-gray-600 font-medium">Permitir opção "Outra" (campo de texto)</Label>
+                <p className="text-[11px] text-gray-400 mt-0.5">Adiciona uma opção "Outra" automaticamente; ao escolhê-la, o entrevistador digita a resposta. Não precisa adicioná-la na lista acima.</p>
+              </div>
+            </div>
+          )}
+
           {allQuestions.length > 1 && (
             <div>
               <Label className="text-xs text-gray-500 mb-1 flex items-center gap-1"><LinkIcon className="w-3 h-3" /> Condicional (depende de)</Label>

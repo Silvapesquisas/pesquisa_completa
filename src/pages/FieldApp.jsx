@@ -18,6 +18,11 @@ import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
 
 const FIELD_USER_KEY = "fieldapp_user";
 
+const OTHER_LABEL = "Outra";
+// Reconhece a opção "Outra/Outro/Outros" que o usuário tenha digitado na lista,
+// para não duplicar com a opção especial gerada pelo allow_other.
+const isOtherOption = (opt) => /^outr[oa]s?$/i.test((opt || "").trim());
+
 function QuestionField({ question, value, onChange }) {
   const type = question.type;
   if (type === "aberta") {
@@ -48,31 +53,73 @@ function QuestionField({ question, value, onChange }) {
     );
   }
   if (type === "unica_escolha") {
+    const allowOther = !!question.allow_other;
+    const presets = (question.options || []).filter(o => !allowOther || !isOtherOption(o));
+    const otherPrefix = `${OTHER_LABEL}: `;
+    const isOther = allowOther && (value === OTHER_LABEL || (value || "").startsWith(otherPrefix));
+    const otherText = (value || "").startsWith(otherPrefix) ? value.slice(otherPrefix.length) : "";
     return (
       <div className="space-y-2">
-        {(question.options || []).map(opt => (
+        {presets.map(opt => (
           <button key={opt} onClick={() => onChange(opt)}
             className={`w-full text-left py-3 px-4 rounded-xl border-2 text-sm transition-all ${value === opt ? "border-blue-600 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-600"}`}>
             {opt}
           </button>
         ))}
+        {allowOther && (
+          <button onClick={() => onChange(otherText ? otherPrefix + otherText : OTHER_LABEL)}
+            className={`w-full text-left py-3 px-4 rounded-xl border-2 text-sm transition-all ${isOther ? "border-blue-600 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-600"}`}>
+            {OTHER_LABEL}
+          </button>
+        )}
+        {isOther && (
+          <Input autoFocus value={otherText} placeholder="Especifique..."
+            onChange={e => onChange(e.target.value ? otherPrefix + e.target.value : OTHER_LABEL)}
+            className="text-base mt-1" />
+        )}
       </div>
     );
   }
   if (type === "multipla_escolha") {
+    const allowOther = !!question.allow_other;
     const selected = value ? value.split("|") : [];
-    const toggle = (opt) => {
+    const presets = (question.options || []).filter(o => !allowOther || !isOtherOption(o));
+    const otherPrefix = `${OTHER_LABEL}: `;
+    const otherEntry = selected.find(s => s === OTHER_LABEL || s.startsWith(otherPrefix));
+    const isOther = allowOther && otherEntry !== undefined;
+    const otherText = otherEntry && otherEntry.startsWith(otherPrefix) ? otherEntry.slice(otherPrefix.length) : "";
+    const emit = (arr) => onChange(arr.join("|"));
+    const togglePreset = (opt) => {
       const updated = selected.includes(opt) ? selected.filter(o => o !== opt) : [...selected, opt];
-      onChange(updated.join("|"));
+      emit(updated);
+    };
+    const toggleOther = () => {
+      if (isOther) emit(selected.filter(s => s !== otherEntry));
+      else emit([...selected, OTHER_LABEL]);
+    };
+    const setOtherText = (t) => {
+      const base = selected.filter(s => s !== otherEntry);
+      emit([...base, t ? otherPrefix + t : OTHER_LABEL]);
     };
     return (
       <div className="space-y-2">
-        {(question.options || []).map(opt => (
-          <button key={opt} onClick={() => toggle(opt)}
+        {presets.map(opt => (
+          <button key={opt} onClick={() => togglePreset(opt)}
             className={`w-full text-left py-3 px-4 rounded-xl border-2 text-sm transition-all ${selected.includes(opt) ? "border-blue-600 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-600"}`}>
             <span className="mr-2">{selected.includes(opt) ? "☑" : "☐"}</span>{opt}
           </button>
         ))}
+        {allowOther && (
+          <button onClick={toggleOther}
+            className={`w-full text-left py-3 px-4 rounded-xl border-2 text-sm transition-all ${isOther ? "border-blue-600 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-600"}`}>
+            <span className="mr-2">{isOther ? "☑" : "☐"}</span>{OTHER_LABEL}
+          </button>
+        )}
+        {isOther && (
+          <Input value={otherText} placeholder="Especifique..."
+            onChange={e => setOtherText(e.target.value)}
+            className="text-base mt-1" />
+        )}
       </div>
     );
   }
@@ -391,6 +438,11 @@ export default function FieldApp() {
 
   const goNext = () => {
     if (currentQuestion?.required && !answers[currentQuestion.id]) { alert("Esta questão é obrigatória."); return; }
+    if (currentQuestion?.required && currentQuestion?.allow_other) {
+      const v = answers[currentQuestion.id] || "";
+      const parts = currentQuestion.type === "multipla_escolha" ? v.split("|") : [v];
+      if (parts.includes(OTHER_LABEL)) { alert("Especifique a opção \"Outra\"."); return; }
+    }
     if (currentIndex < visibleQuestions.length - 1) setCurrentIndex(i => i + 1);
     else setStep("review");
   };
