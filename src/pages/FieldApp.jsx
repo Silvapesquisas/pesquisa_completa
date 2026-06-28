@@ -215,6 +215,9 @@ export default function FieldApp() {
   const [showIndex, setShowIndex] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [autoSaveMsg, setAutoSaveMsg] = useState("");
+  // Id estável por entrevista, enviado ao servidor para deduplicar reenvios
+  // (evita entrevista duplicada quando a resposta do envio se perde).
+  const clientUuidRef = useRef(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
@@ -454,6 +457,7 @@ export default function FieldApp() {
   };
 
   const buildInterviewData = () => {
+    if (!clientUuidRef.current) clientUuidRef.current = crypto.randomUUID();
     const formattedAnswers = visibleQuestions.map(q => {
       const raw = answers[q.id] || "";
       const isMulti = q.type === "multipla_escolha";
@@ -464,6 +468,7 @@ export default function FieldApp() {
       };
     });
     return {
+      client_uuid: clientUuidRef.current,
       survey_id: selectedSurvey.id,
       survey_title: selectedSurvey.title,
       field_user_id: fieldUser?.id,
@@ -534,6 +539,7 @@ export default function FieldApp() {
     setAudioUrl(draft.audio_url || draft._audioBase64 || null);
     setAudioDuration(draft.audio_duration || 0);
     setCurrentDraftId(draft._draftId);
+    clientUuidRef.current = draft.client_uuid || draft._draftId || crypto.randomUUID();
     setCurrentIndex(0);
     setStep("interview");
   };
@@ -580,6 +586,7 @@ export default function FieldApp() {
     setCurrentIndex(0); setLocation(null); setAudioUrl(null);
     setAudioBase64(null); setAudioDuration(0);
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
+    clientUuidRef.current = null;
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
   };
 
@@ -877,7 +884,7 @@ export default function FieldApp() {
             }
             setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null);
             setAudioUrl(null); setAudioBase64(null); setAudioDuration(0); setRecording(false);
-            setCurrentDraftId(null);
+            setCurrentDraftId(null); clientUuidRef.current = crypto.randomUUID();
             setStep("interview"); getLocation(true);
           }}
         />

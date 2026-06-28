@@ -8,10 +8,12 @@ import { ptBR } from "date-fns/locale";
 const statusConfig = {
   pending: { label: "Aguardando envio", color: "bg-yellow-100 text-yellow-700", icon: Clock },
   error: { label: "Erro no envio", color: "bg-red-100 text-red-700", icon: AlertCircle },
+  failed_permanent: { label: "Não enviada — abra para corrigir", color: "bg-red-100 text-red-700", icon: AlertCircle },
   em_andamento: { label: "Em andamento", color: "bg-blue-100 text-blue-700", icon: Edit },
 };
 
 function draftStatus(draft) {
+  if (draft._syncStatus === "failed_permanent") return statusConfig.failed_permanent;
   if (draft._syncStatus === "error") return statusConfig.error;
   if (draft.status === "em_andamento") return statusConfig.em_andamento;
   return statusConfig.pending;
