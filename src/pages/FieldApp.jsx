@@ -360,8 +360,10 @@ export default function FieldApp() {
     reader.readAsDataURL(blob);
   });
 
-  // Limite para manter áudio offline no localStorage (~5MB total disponível)
-  const MAX_OFFLINE_AUDIO_BYTES = 2.5 * 1024 * 1024;
+  // Limite do áudio guardado/enviado. Agora os rascunhos ficam no IndexedDB
+  // (cota grande), então o limite acompanha o do servidor (~15 MB de áudio,
+  // ~20 MB como data URL base64). Suficiente para entrevistas longas de auditoria.
+  const MAX_OFFLINE_AUDIO_BYTES = 20 * 1024 * 1024;
 
   const startRecording = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -495,6 +497,11 @@ export default function FieldApp() {
   };
 
   const submit = async () => {
+    // Pesquisa auditável: não conclui sem áudio.
+    if (selectedSurvey?.require_audio && !audioBase64) {
+      alert("Esta pesquisa exige a gravação de áudio para auditoria. Grave o áudio antes de concluir a entrevista.");
+      return;
+    }
     setSaving(true);
     const interviewData = buildInterviewData();
     if (!isOnline) {
@@ -664,7 +671,10 @@ export default function FieldApp() {
           )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2"><Mic className="w-4 h-4 text-purple-500" /> Áudio</h3>
+          <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
+            <Mic className="w-4 h-4 text-purple-500" /> Áudio
+            {selectedSurvey?.require_audio && <Badge className="bg-purple-100 text-purple-700 text-[10px]">Obrigatório</Badge>}
+          </h3>
           {audioUrl ? (
             <div className="space-y-2">
               <audio controls src={audioUrl} className="w-full" />
@@ -676,7 +686,11 @@ export default function FieldApp() {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">Nenhum áudio gravado. Você pode gravar durante as questões ou aqui.</p>
+              <p className={`text-xs rounded-lg px-3 py-2 ${selectedSurvey?.require_audio ? "text-red-700 bg-red-50" : "text-orange-600 bg-orange-50"}`}>
+                {selectedSurvey?.require_audio
+                  ? "Esta pesquisa exige áudio: grave para poder concluir a entrevista."
+                  : "Nenhum áudio gravado. Você pode gravar durante as questões ou aqui."}
+              </p>
               <Button variant="outline" size="sm" onClick={recording ? stopRecording : startRecording} className={`w-full ${recording ? "border-red-300 text-red-600 animate-pulse" : ""}`}>
                 {recording ? <><MicOff className="w-4 h-4 mr-2" /> Parar Gravação</> : <><Mic className="w-4 h-4 mr-2" /> Gravar Áudio</>}
               </Button>

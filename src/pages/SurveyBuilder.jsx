@@ -193,7 +193,7 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
 
 const EMPTY_SURVEY = {
   title: "", description: "", category: "urbano", status: "rascunho",
-  questions: [], target_interviews: "", start_date: "", end_date: ""
+  questions: [], target_interviews: "", start_date: "", end_date: "", require_audio: false
 };
 
 export default function SurveyBuilder() {
@@ -420,6 +420,13 @@ export default function SurveyBuilder() {
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Encerramento</Label>
               <Input type="date" value={survey.end_date || ""} onChange={e => setSurvey(s => ({ ...s, end_date: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex items-start gap-2 bg-purple-50 rounded-lg p-3">
+            <Switch checked={survey.require_audio || false} onCheckedChange={val => setSurvey(s => ({ ...s, require_audio: val }))} className="mt-0.5" />
+            <div>
+              <Label className="text-xs text-gray-700 font-medium">Exigir gravação de áudio (auditoria)</Label>
+              <p className="text-[11px] text-gray-500 mt-0.5">O entrevistador não consegue concluir a entrevista sem gravar o áudio. Use em pesquisas que precisam ser 100% auditadas.</p>
             </div>
           </div>
         </CardContent>
