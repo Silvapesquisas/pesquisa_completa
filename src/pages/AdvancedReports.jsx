@@ -22,6 +22,15 @@ const STATUS_COLORS = {
 };
 
 function InterviewDetailModal({ interview, surveys, onClose }) {
+  const [audioSrc, setAudioSrc] = useState(null);
+  useEffect(() => {
+    let active = true;
+    setAudioSrc(null);
+    if (interview?.audio_url) {
+      base44.storage.signedAudioUrl(interview.audio_url).then(u => { if (active) setAudioSrc(u); });
+    }
+    return () => { active = false; };
+  }, [interview?.audio_url]);
   if (!interview) return null;
   const survey = surveys.find(s => s.id === interview.survey_id);
 
@@ -66,10 +75,16 @@ function InterviewDetailModal({ interview, surveys, onClose }) {
                 <Mic className="w-3.5 h-3.5" /> Áudio da Entrevista
                 {interview.audio_duration && <span className="font-normal ml-1">({Math.floor(interview.audio_duration / 60)}m {Math.round(interview.audio_duration % 60)}s)</span>}
               </p>
-              <audio controls src={interview.audio_url} className="w-full" />
-              <a href={interview.audio_url} download className="text-xs text-purple-600 hover:underline flex items-center gap-1 mt-2">
-                <Download className="w-3 h-3" /> Baixar áudio
-              </a>
+              {audioSrc ? (
+                <>
+                  <audio controls src={audioSrc} className="w-full" />
+                  <a href={audioSrc} download className="text-xs text-purple-600 hover:underline flex items-center gap-1 mt-2">
+                    <Download className="w-3 h-3" /> Baixar áudio
+                  </a>
+                </>
+              ) : (
+                <p className="text-xs text-gray-400">Carregando áudio…</p>
+              )}
             </div>
           )}
 
