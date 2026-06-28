@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Plus, Pencil, Users, Shield, CalendarClock } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function Companies() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
+  const [inviteOwner, setInviteOwner] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -50,6 +52,7 @@ export default function Companies() {
 
   const openNew = () => {
     setEditTarget(null);
+    setInviteOwner(true);
     setForm({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
     setFormOpen(true);
   };
@@ -80,7 +83,16 @@ export default function Companies() {
       if (editTarget) {
         await base44.entities.Company.update(editTarget.id, data);
       } else {
-        await base44.entities.Company.create(data);
+        const created = await base44.entities.Company.create(data);
+        // Cria o admin da nova empresa: convida o gestor por e-mail, já
+        // vinculado à empresa, com papel "admin" (nunca super-admin).
+        if (inviteOwner && form.owner_email && created?.id) {
+          try {
+            await base44.users.inviteUser(form.owner_email, "admin", created.id);
+          } catch (e) {
+            alert(`Empresa criada, mas o convite ao gestor falhou: ${e?.message || "tente novamente pela página Usuários."}`);
+          }
+        }
       }
     } catch (e) {
       alert("Erro ao salvar empresa: " + (e?.message || "tente novamente."));
@@ -202,6 +214,15 @@ export default function Companies() {
               <Label className="text-xs text-gray-500 mb-1 block">E-mail do Gestor *</Label>
               <Input value={form.owner_email} onChange={e => setForm(p => ({ ...p, owner_email: e.target.value }))} placeholder="gestor@empresa.com" type="email" />
             </div>
+            {!editTarget && (
+              <div className="flex items-start gap-2 bg-blue-50 rounded-lg p-3">
+                <Switch checked={inviteOwner} onCheckedChange={setInviteOwner} className="mt-0.5" />
+                <div>
+                  <Label className="text-xs text-gray-700 font-medium">Convidar o gestor como admin da empresa</Label>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Envia um e-mail para {form.owner_email || "o gestor"} definir a senha. Ele entra como <strong>administrador desta empresa</strong>, sem acesso de super-admin.</p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Plano</Label>

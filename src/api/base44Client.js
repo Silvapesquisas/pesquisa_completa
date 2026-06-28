@@ -130,8 +130,10 @@ const integrations = {
 };
 
 const users = {
-  inviteUser(email, role) {
-    return invokeFunction("inviteUser", { email, role });
+  // companyId só é respeitado quando o chamador é super-admin (validado no servidor);
+  // para admins de empresa, o backend força a própria empresa.
+  inviteUser(email, role, companyId) {
+    return invokeFunction("inviteUser", { email, role, company_id: companyId });
   },
 };
 

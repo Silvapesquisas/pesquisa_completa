@@ -15,20 +15,26 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("entrevistador");
+  const [inviteRole, setInviteRole] = useState("supervisor");
+  const [inviteCompanyId, setInviteCompanyId] = useState("");
   const [inviting, setInviting] = useState(false);
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [companies, setCompanies] = useState([]);
 
   const load = async () => {
     const me = await base44.auth.me();
     setCurrentUser(me);
     const companyId = me?.company_id;
     // Super-admins (no company_id) see all users; others see only their company
-    const list = companyId
-      ? await base44.entities.User.filter({ company_id: companyId })
-      : await base44.entities.User.list();
+    const [list, cos] = await Promise.all([
+      companyId
+        ? base44.entities.User.filter({ company_id: companyId })
+        : base44.entities.User.list(),
+      base44.entities.Company.list(), // RLS: super-admin vê todas; admin vê a sua
+    ]);
     setUsers(list);
+    setCompanies(cos);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -55,15 +61,26 @@ export default function Users() {
     load();
   };
 
+  const companyName = (id) => companies.find(c => c.id === id)?.name || "Sem empresa";
+
+  // Reatribuir empresa: exclusivo do super-admin (gerencia todas as empresas).
+  const assignCompany = async (u, companyId) => {
+    if (!isSuperAdmin) return;
+    await base44.entities.User.update(u.id, { company_id: companyId || null });
+    load();
+  };
+
   const invite = async () => {
     if (!inviteEmail) return;
     setInviting(true);
     try {
-      // A função backend cria o convite no Auth e já vincula o usuário à
-      // empresa do convidante com o papel escolhido (admin/supervisor)
-      await base44.users.inviteUser(inviteEmail, inviteRole);
+      // A função backend cria o convite no Auth e vincula o usuário a uma
+      // empresa com o papel escolhido (admin/supervisor). O super-admin pode
+      // escolher a empresa; o admin de empresa convida sempre para a sua.
+      await base44.users.inviteUser(inviteEmail, inviteRole, isSuperAdmin ? (inviteCompanyId || undefined) : undefined);
       setInviteOpen(false);
       setInviteEmail("");
+      setInviteCompanyId("");
       load();
     } catch (e) {
       alert(e?.message || "Falha ao convidar usuário.");
@@ -112,10 +129,22 @@ export default function Users() {
                     {u.active === false && <Badge variant="destructive" className="text-xs">Inativo</Badge>}
                   </div>
                   <p className="text-xs text-gray-400 mt-1">{u.email}</p>
+                  <p className="text-xs text-gray-400">Empresa: {u.company_id ? companyName(u.company_id) : "—"}{u.is_super_admin ? " · Super-admin" : ""}</p>
                   {u.region && <p className="text-xs text-gray-400">Região: {u.region}</p>}
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 flex-wrap">
+                  {isSuperAdmin && (
+                    <Select value={u.company_id || "none"} onValueChange={val => assignCompany(u, val === "none" ? "" : val)}>
+                      <SelectTrigger className="w-40 text-xs h-8">
+                        <SelectValue placeholder="Empresa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem empresa</SelectItem>
+                        {companies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={u.role || "entrevistador"} onValueChange={val => updateRole(u, val)}>
                     <SelectTrigger className="w-36 text-xs h-8">
                       <SelectValue />
@@ -148,6 +177,18 @@ export default function Users() {
               <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>
               <Input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="gestor@empresa.com" type="email" />
             </div>
+            {isSuperAdmin && (
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 block">Empresa</Label>
+                <Select value={inviteCompanyId || "none"} onValueChange={v => setInviteCompanyId(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a empresa" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem empresa (vincular depois)</SelectItem>
+                    {companies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Perfil</Label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
