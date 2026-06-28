@@ -506,12 +506,13 @@ export default function FieldApp() {
     try {
       // O envio passa pela função backend, que valida o código de acesso e
       // força empresa/entrevistador no servidor (entidades trancadas por RLS)
-      await base44.functions.invoke("fieldSubmitInterview", {
+      const res = await base44.functions.invoke("fieldSubmitInterview", {
         code: fieldUser.access_code,
         interview: interviewData,
         audio_base64: audioBase64 || undefined,
       });
       if (currentDraftId) removeDraft(currentDraftId);
+      if (res?.audio_failed) alert("Entrevista enviada com sucesso, mas o áudio não pôde ser salvo (verifique a conexão ou o tamanho da gravação).");
       setStep("done");
     } catch (e) {
       // Falha no envio (conexão instável, etc.): preserva como rascunho para sincronizar depois
