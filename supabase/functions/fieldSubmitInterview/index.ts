@@ -6,7 +6,7 @@
 // Saída:    { id, audio_url? }
 import { corsHeaders, json, serviceClient, sleep, monthStartISO } from "../_shared/utils.ts";
 
-const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
