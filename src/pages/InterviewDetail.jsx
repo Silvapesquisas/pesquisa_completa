@@ -15,6 +15,7 @@ export default function InterviewDetail() {
   const id = params.get("id");
   const [interview, setInterview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [audioSrc, setAudioSrc] = useState(null);
 
   useEffect(() => {
     if (!id) return;
@@ -25,6 +26,16 @@ export default function InterviewDetail() {
       .catch(() => setInterview(null))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Gera a URL assinada do áudio (bucket privado) quando a entrevista carrega.
+  useEffect(() => {
+    let active = true;
+    setAudioSrc(null);
+    if (interview?.audio_url) {
+      base44.storage.signedAudioUrl(interview.audio_url).then(u => { if (active) setAudioSrc(u); });
+    }
+    return () => { active = false; };
+  }, [interview?.audio_url]);
 
   if (loading) return <div className="p-6 text-gray-400">Carregando...</div>;
   if (!interview) return <div className="p-6 text-gray-400">Entrevista não encontrada.</div>;
@@ -78,7 +89,14 @@ export default function InterviewDetail() {
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Mic className="w-4 h-4" /> Áudio da Entrevista</CardTitle></CardHeader>
           <CardContent>
-            <audio controls src={interview.audio_url} className="w-full" />
+            {audioSrc ? (
+              <>
+                <audio controls src={audioSrc} className="w-full" />
+                <a href={audioSrc} download className="text-xs text-blue-600 hover:underline inline-block mt-2">Baixar áudio</a>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">Carregando áudio…</p>
+            )}
             {interview.audio_duration && (
               <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Duração: {Math.round(interview.audio_duration)}s

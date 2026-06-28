@@ -3,8 +3,8 @@
 // por RLS para qualquer acesso anônimo direto.
 //
 // Entrada:  { code: string, withInterviews?: boolean }
-// Saída:    { fieldUser, surveys, counts, companyMonthly, myInterviews? }
-import { corsHeaders, json, serviceClient, sleep, monthStartISO } from "../_shared/utils.ts";
+// Saída:    { fieldUser, surveys, counts, myInterviews? }
+import { corsHeaders, json, serviceClient, sleep } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -39,22 +39,10 @@ Deno.serve(async (req) => {
       if (iv.status === "concluida") counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1;
     }
 
-    // Cota mensal da empresa
-    let companyMonthly: { limit: number; used: number } | null = null;
-    const { data: comp } = await svc
-      .from("companies").select("max_interviews_per_month").eq("id", fieldUser.company_id).limit(1);
-    const monthlyLimit = Number(comp?.[0]?.max_interviews_per_month) || 0;
-    if (monthlyLimit > 0) {
-      const ms = monthStartISO();
-      const { data: ci } = await svc
-        .from("interviews").select("completed_at, created_date, status")
-        .eq("company_id", fieldUser.company_id).eq("status", "concluida");
-      const used = (ci || []).filter((iv) => (iv.completed_at || iv.created_date || "") >= ms).length;
-      companyMonthly = { limit: monthlyLimit, used };
-    }
-
+    // A cota mensal da empresa NÃO é exposta ao app de campo (informação
+    // gerencial). A regra continua sendo aplicada no envio (fieldSubmitInterview).
     return json({
-      fieldUser, surveys, counts, companyMonthly,
+      fieldUser, surveys, counts,
       ...(withInterviews ? { myInterviews: myInterviews || [] } : {}),
     });
   } catch (error) {

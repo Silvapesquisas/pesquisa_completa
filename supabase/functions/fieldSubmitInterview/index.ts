@@ -87,7 +87,9 @@ Deno.serve(async (req) => {
           const path = `${fieldUser.company_id}/${crypto.randomUUID()}.webm`;
           const { error: upErr } = await svc.storage.from("audio").upload(path, bytes, { contentType: "audio/webm" });
           if (!upErr) {
-            audioUrl = svc.storage.from("audio").getPublicUrl(path).data.publicUrl;
+            // Guarda o CAMINHO no storage (bucket privado). O painel gera uma
+            // URL assinada temporária na hora de reproduzir/baixar.
+            audioUrl = path;
           } else {
             audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
           }

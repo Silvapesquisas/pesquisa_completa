@@ -221,7 +221,6 @@ export default function FieldApp() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
-  const [companyMonthly, setCompanyMonthly] = useState(null); // { limit, used } cota mensal da empresa
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
@@ -257,7 +256,6 @@ export default function FieldApp() {
       setFieldUser(res.fieldUser);
       setOnlineSurveys(res.surveys || []);
       setMyInterviewCounts(res.counts || {});
-      setCompanyMonthly(res.companyMonthly || null);
     } catch {
       // silently fail
     }
@@ -441,7 +439,18 @@ export default function FieldApp() {
 
   const currentQuestion = visibleQuestions[currentIndex];
 
+  // Em pesquisas com áudio obrigatório, não avança enquanto a gravação não for
+  // iniciada (ou já capturada).
+  const audioBlocksAdvance = () => {
+    if (selectedSurvey?.require_audio && !recording && !audioBase64) {
+      alert('Esta pesquisa exige áudio. Toque em "Gravar áudio" para iniciar a gravação antes de avançar.');
+      return true;
+    }
+    return false;
+  };
+
   const goNext = () => {
+    if (audioBlocksAdvance()) return;
     if (currentQuestion?.required && !answers[currentQuestion.id]) { alert("Esta questão é obrigatória."); return; }
     if (currentQuestion?.required && currentQuestion?.allow_other) {
       const v = answers[currentQuestion.id] || "";
@@ -453,6 +462,7 @@ export default function FieldApp() {
   };
 
   const skipQuestion = () => {
+    if (audioBlocksAdvance()) return;
     if (currentQuestion?.required) { alert("Esta questão é obrigatória e não pode ser pulada."); return; }
     if (currentIndex < visibleQuestions.length - 1) setCurrentIndex(i => i + 1);
     else setStep("review");
@@ -741,13 +751,16 @@ export default function FieldApp() {
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs opacity-75 truncate flex-1 mr-2">{selectedSurvey?.title}</p>
             <div className="flex items-center gap-3 shrink-0">
-              {/* Audio recording at the top */}
-              <button
-                onClick={recording ? stopRecording : startRecording}
-                className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all ${recording ? "bg-red-500 text-white animate-pulse" : "bg-blue-500 text-blue-100 hover:text-white"}`}
-              >
-                {recording ? <><MicOff className="w-3 h-3" /> Parar</> : <><Mic className="w-3 h-3" /> {audioUrl ? "Regravando" : "Gravar"}</>}
-              </button>
+              {/* Áudio opcional: botão compacto no topo. Quando obrigatório, há
+                  uma barra de gravação destacada logo abaixo. */}
+              {!selectedSurvey?.require_audio && (
+                <button
+                  onClick={recording ? stopRecording : startRecording}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all ${recording ? "bg-red-500 text-white animate-pulse" : "bg-blue-500 text-blue-100 hover:text-white"}`}
+                >
+                  {recording ? <><MicOff className="w-3 h-3" /> Parar</> : <><Mic className="w-3 h-3" /> {audioUrl ? "Regravando" : "Gravar"}</>}
+                </button>
+              )}
               <button onClick={() => setShowIndex(true)} className="text-xs text-blue-200 hover:text-white flex items-center gap-1">
                 <List className="w-3 h-3" /> Índice
               </button>
@@ -766,6 +779,24 @@ export default function FieldApp() {
                 : <Badge className="bg-blue-400/50 text-white text-xs">Opcional</Badge>}
             </div>
           </div>
+          {selectedSurvey?.require_audio && (
+            <button
+              onClick={recording ? stopRecording : startRecording}
+              className={`mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3 text-base font-semibold transition-all ${
+                recording
+                  ? "bg-red-500 text-white animate-pulse"
+                  : audioBase64
+                    ? "bg-green-500 text-white"
+                    : "bg-amber-400 text-amber-950"
+              }`}
+            >
+              {recording
+                ? <><MicOff className="w-5 h-5" /> Parar gravação</>
+                : audioBase64
+                  ? <><Mic className="w-5 h-5" /> Áudio gravado — toque para regravar</>
+                  : <><Mic className="w-5 h-5" /> Gravar áudio (obrigatório)</>}
+            </button>
+          )}
           {limitReached && (
             <div className="mt-2 bg-orange-500 rounded-lg px-3 py-2 text-xs text-white flex items-center gap-2">
               <Target className="w-3.5 h-3.5 shrink-0" />
@@ -862,18 +893,6 @@ export default function FieldApp() {
           lastSynced={lastSynced} onSync={syncDrafts}
           syncLogs={syncLogs} onClearLogs={clearLogs}
         />
-
-        {companyMonthly && (
-          <div className={`rounded-xl px-4 py-2.5 text-sm border ${
-            companyMonthly.used >= companyMonthly.limit
-              ? "bg-red-50 border-red-200 text-red-700"
-              : "bg-blue-50 border-blue-100 text-blue-700"
-          }`}>
-            {companyMonthly.used >= companyMonthly.limit
-              ? `Cota mensal da empresa atingida (${companyMonthly.used}/${companyMonthly.limit}). Novas entrevistas só no próximo mês ou após o administrador aumentar o limite.`
-              : `Entrevistas da empresa neste mês: ${companyMonthly.used}/${companyMonthly.limit}.`}
-          </div>
-        )}
 
         <div id="drafts-section">
           <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} />

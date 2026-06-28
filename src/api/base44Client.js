@@ -129,6 +129,18 @@ const integrations = {
   },
 };
 
+const storage = {
+  // Gera uma URL assinada (temporária) para um caminho de áudio no bucket
+  // privado. Aceita URLs http antigas por compatibilidade. Retorna null se falhar.
+  async signedAudioUrl(pathOrUrl, expiresIn = 3600) {
+    if (!pathOrUrl) return null;
+    if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
+    const { data, error } = await supabase.storage.from("audio").createSignedUrl(pathOrUrl, expiresIn);
+    if (error) return null;
+    return data?.signedUrl || null;
+  },
+};
+
 const users = {
   // companyId só é respeitado quando o chamador é super-admin (validado no servidor);
   // para admins de empresa, o backend força a própria empresa.
@@ -143,4 +155,5 @@ export const base44 = {
   functions: { invoke: invokeFunction },
   integrations,
   users,
+  storage,
 };
