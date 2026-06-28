@@ -30,13 +30,16 @@ Deno.serve(async (req) => {
     }
 
     // Define perfil (role + empresa). O gatilho handle_new_user já criou a linha;
-    // aqui garantimos os valores corretos.
+    // aqui garantimos os valores corretos. is_super_admin é SEMPRE false: novos
+    // usuários/empresas nunca recebem acesso global de plataforma por aqui — o
+    // super-admin é definido apenas manualmente no banco.
     const { error: upErr } = await svc.from("users").upsert({
       id: invited.user.id,
       email,
       role: targetRole,
       company_id: targetCompanyId,
       active: true,
+      is_super_admin: false,
     });
     if (upErr) return json({ error: upErr.message }, 500);
 

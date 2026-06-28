@@ -11,6 +11,7 @@ import AuditLog from './pages/AuditLog';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
+import SetPassword from '@/components/SetPassword';
 
 // Rotas públicas: app dos entrevistadores (login por código, sem conta Supabase)
 const PUBLIC_PATHS = ["/FieldApp", "/InterviewerDashboard"];
@@ -52,10 +53,23 @@ const AnimatedRoute = ({ children }) => (
 );
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, needsPasswordSetup } = useAuth();
   const location = useLocation();
 
   const isPublic = PUBLIC_PATHS.includes(location.pathname);
+
+  // Convite/recuperação de senha: tem prioridade sobre login e rotas. Aguarda o
+  // carregamento da sessão (o link já autentica) e exibe a tela de definir senha.
+  if (needsPasswordSetup) {
+    if (isLoadingAuth) {
+      return (
+        <div className="fixed inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    return <SetPassword />;
+  }
 
   // Rotas públicas (app de campo) renderizam sem exigir sessão do painel
   if (!isPublic) {
