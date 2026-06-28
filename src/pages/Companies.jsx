@@ -28,7 +28,7 @@ export default function Companies() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
+  const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "", logo_url: "" });
   const [inviteOwner, setInviteOwner] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -53,8 +53,28 @@ export default function Companies() {
   const openNew = () => {
     setEditTarget(null);
     setInviteOwner(true);
-    setForm({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "" });
+    setForm({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "", logo_url: "" });
     setFormOpen(true);
+  };
+
+  // Lê uma imagem, reduz para no máx. 256px e devolve data URL (base64 leve).
+  const onLogoFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 256;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        setForm(p => ({ ...p, logo_url: cv.toDataURL("image/png") }));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   };
 
   const openEdit = (co) => {
@@ -63,7 +83,7 @@ export default function Companies() {
       name: co.name, owner_email: co.owner_email, plan: co.plan || "basico",
       max_interviewers: co.max_interviewers || MIN_FIELD_USERS,
       max_interviews_per_month: co.max_interviews_per_month ?? "",
-      phone: co.phone || "", cnpj: co.cnpj || "",
+      phone: co.phone || "", cnpj: co.cnpj || "", logo_url: co.logo_url || "",
     });
     setFormOpen(true);
   };
@@ -71,7 +91,7 @@ export default function Companies() {
   const save = async () => {
     setSaving(true);
     // Campos básicos que qualquer admin da empresa pode editar
-    const data = { name: form.name, owner_email: form.owner_email, plan: form.plan, phone: form.phone, cnpj: form.cnpj };
+    const data = { name: form.name, owner_email: form.owner_email, plan: form.plan, phone: form.phone, cnpj: form.cnpj, logo_url: form.logo_url || null };
     // Limites só são enviados pelo super-admin (e protegidos por RLS no servidor)
     if (isSuperAdmin) {
       data.max_interviewers = clampFieldUsers(form.max_interviewers);
@@ -274,6 +294,20 @@ export default function Companies() {
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">CNPJ</Label>
                 <Input value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Logomarca (usada nos relatórios)</Label>
+              <div className="flex items-center gap-3">
+                {form.logo_url ? (
+                  <img src={form.logo_url} alt="logo" className="w-14 h-14 object-contain rounded border bg-white" />
+                ) : (
+                  <div className="w-14 h-14 rounded border bg-gray-50 flex items-center justify-center text-gray-300 text-[10px]">sem logo</div>
+                )}
+                <div className="flex flex-col gap-1">
+                  <input type="file" accept="image/*" onChange={e => onLogoFile(e.target.files?.[0])} className="text-xs" />
+                  {form.logo_url && <button type="button" onClick={() => setForm(p => ({ ...p, logo_url: "" }))} className="text-xs text-red-500 text-left">Remover logo</button>}
+                </div>
               </div>
             </div>
             <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={save} disabled={saving || !form.name || !form.owner_email}>
