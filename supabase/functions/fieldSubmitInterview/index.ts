@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
 
     // Áudio gravado no aparelho -> Supabase Storage (bucket "audio")
     let audioUrl: string | null = null;
+    let audioFailed = false; // sinaliza ao app quando havia áudio mas o upload falhou
     if (typeof audio_base64 === "string" && audio_base64.startsWith("data:")) {
       const [, b64] = audio_base64.split(",");
       if (b64) {
@@ -87,9 +88,11 @@ Deno.serve(async (req) => {
           const { error: upErr } = await svc.storage.from("audio").upload(path, bytes, { contentType: "audio/webm" });
           if (!upErr) {
             audioUrl = svc.storage.from("audio").getPublicUrl(path).data.publicUrl;
+          } else {
+            audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
           }
         } catch {
-          audioUrl = null; // falha no áudio não bloqueia o registro
+          audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
         }
       }
     }
@@ -124,7 +127,7 @@ Deno.serve(async (req) => {
       return json({ error: insErr.message }, 500);
     }
 
-    return json({ id: created.id, audio_url: audioUrl });
+    return json({ id: created.id, audio_url: audioUrl, audio_failed: audioFailed });
   } catch (error) {
     return json({ error: (error as Error).message || "Erro interno." }, 500);
   }

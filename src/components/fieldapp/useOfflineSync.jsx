@@ -1,30 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { idbGet, idbSet, idbMigrateFromLocalStorage } from "@/components/fieldapp/idbStore";
 
 const DRAFTS_KEY = "fieldsurvey_drafts";
 const OFFLINE_SURVEYS_KEY = "fieldsurvey_offline_surveys";
 const SYNC_LOGS_KEY = "fieldsurvey_sync_logs";
 const FIELD_USER_KEY = "fieldapp_user";
 
-function loadJSON(key, fallback) {
+// FIELD_USER_KEY continua no localStorage (dado pequeno, lido no boot/login).
+function loadLocal(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
   catch { return fallback; }
 }
 
-// Pode falhar por falta de espaço (QuotaExceededError) — não derruba o app
-function persist(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); }
-  catch (e) { console.error(`Falha ao salvar ${key} no localStorage:`, e); }
-}
-
 export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [drafts, setDrafts] = useState(() => loadJSON(DRAFTS_KEY, []));
-  const [offlineSurveys, setOfflineSurveys] = useState(() => loadJSON(OFFLINE_SURVEYS_KEY, []));
-  const [syncLogs, setSyncLogs] = useState(() => loadJSON(SYNC_LOGS_KEY, []));
+  const [drafts, setDrafts] = useState([]);
+  const [offlineSurveys, setOfflineSurveys] = useState([]);
+  const [syncLogs, setSyncLogs] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
   const syncRef = useRef(false);
+  const draftsRef = useRef([]); // espelho sempre atual (evita closure obsoleta na sincronização)
 
   // Online/offline detection
   useEffect(() => {
@@ -35,10 +33,24 @@ export function useOfflineSync() {
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
-  // Persist to localStorage
-  useEffect(() => { persist(DRAFTS_KEY, drafts); }, [drafts]);
-  useEffect(() => { persist(OFFLINE_SURVEYS_KEY, offlineSurveys); }, [offlineSurveys]);
-  useEffect(() => { persist(SYNC_LOGS_KEY, syncLogs.slice(-50)); }, [syncLogs]);
+  // Carrega do IndexedDB no início (migrando do localStorage antigo, se houver).
+  // Áudios em base64 podem ter MBs; o IndexedDB evita o estouro de cota do
+  // localStorage que poderia perder entrevistas offline.
+  useEffect(() => {
+    (async () => {
+      const d = (await idbMigrateFromLocalStorage(DRAFTS_KEY)) || [];
+      const os = (await idbMigrateFromLocalStorage(OFFLINE_SURVEYS_KEY)) || [];
+      const sl = (await idbMigrateFromLocalStorage(SYNC_LOGS_KEY)) || [];
+      draftsRef.current = d;
+      setDrafts(d); setOfflineSurveys(os); setSyncLogs(sl);
+      setHydrated(true);
+    })();
+  }, []);
+
+  // Persiste no IndexedDB (só após hidratar, para não sobrescrever com o [] inicial)
+  useEffect(() => { if (!hydrated) return; draftsRef.current = drafts; idbSet(DRAFTS_KEY, drafts); }, [drafts, hydrated]);
+  useEffect(() => { if (!hydrated) return; idbSet(OFFLINE_SURVEYS_KEY, offlineSurveys); }, [offlineSurveys, hydrated]);
+  useEffect(() => { if (!hydrated) return; idbSet(SYNC_LOGS_KEY, syncLogs.slice(-50)); }, [syncLogs, hydrated]);
 
   const logSeq = useRef(0);
   const addLog = useCallback((type, message, draftId = null) => {
@@ -75,13 +87,13 @@ export function useOfflineSync() {
     if (syncRef.current || !isOnline) return 0;
     // Sincroniza apenas entrevistas CONCLUÍDAS. Rascunhos "em_andamento"
     // (auto-save de entrevistas em curso) permanecem locais até serem finalizados.
-    const pending = loadJSON(DRAFTS_KEY, [])
+    const pending = draftsRef.current
       .filter(d => d._syncStatus !== "failed_permanent" && d.status === "concluida");
     if (pending.length === 0) return 0;
 
     // O envio passa pela função backend "fieldSubmitInterview", que valida o
     // código de acesso e força empresa/entrevistador no servidor
-    const accessCode = loadJSON(FIELD_USER_KEY, null)?.access_code;
+    const accessCode = loadLocal(FIELD_USER_KEY, null)?.access_code;
     if (!accessCode) {
       addLog("error", "Sessão do entrevistador não encontrada. Faça login novamente para sincronizar.");
       return 0;
@@ -97,14 +109,18 @@ export function useOfflineSync() {
     for (const draft of pending) {
       const { _draftId, _savedAt, _syncStatus, _lastError, _audioBase64, ...interviewData } = draft;
       try {
-        await base44.functions.invoke("fieldSubmitInterview", {
+        const res = await base44.functions.invoke("fieldSubmitInterview", {
           code: accessCode,
           interview: interviewData,
           audio_base64: _audioBase64 || undefined,
         });
         successIds.push(_draftId);
         successCount++;
-        addLog("success", `"${interviewData.survey_title || "Entrevista"}" enviada com sucesso.`, _draftId);
+        if (res?.audio_failed) {
+          addLog("error", `"${interviewData.survey_title || "Entrevista"}" enviada, mas o áudio não pôde ser salvo.`, _draftId);
+        } else {
+          addLog("success", `"${interviewData.survey_title || "Entrevista"}" enviada com sucesso.`, _draftId);
+        }
       } catch (e) {
         // Erros de negócio (4xx) não se resolvem com novas tentativas — ex.:
         // pesquisa encerrada/não atribuída, limite atingido, áudio grande.
@@ -141,7 +157,7 @@ export function useOfflineSync() {
   useEffect(() => {
     if (!isOnline) return;
     const interval = setInterval(() => {
-      if (hasSyncable(loadJSON(DRAFTS_KEY, []))) syncDrafts();
+      if (hasSyncable(draftsRef.current)) syncDrafts();
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isOnline, syncDrafts]);
