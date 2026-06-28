@@ -23,6 +23,20 @@ Deno.serve(async (req) => {
     }
     const fieldUser = users[0];
 
+    // Idempotência: se a mesma entrevista (client_uuid gerado no aparelho) já
+    // foi registrada, devolve o id existente em vez de duplicar. Isso cobre o
+    // caso de a resposta ter se perdido após a gravação (timeout/queda) e o
+    // app reenviar. Checado ANTES dos limites para não rejeitar um reenvio.
+    const clientUuid = (typeof interview.client_uuid === "string" && interview.client_uuid)
+      ? interview.client_uuid : null;
+    if (clientUuid) {
+      const { data: dup } = await svc.from("interviews")
+        .select("id, audio_url").eq("client_uuid", clientUuid).eq("company_id", fieldUser.company_id).limit(1);
+      if (dup && dup.length > 0) {
+        return json({ id: dup[0].id, audio_url: dup[0].audio_url, duplicate: true });
+      }
+    }
+
     // Pesquisa: existe, ativa, da empresa do entrevistador e atribuída a ele
     const { data: surveys } = await svc.from("surveys").select("*").eq("id", interview.survey_id).limit(1);
     const survey = surveys?.[0];
@@ -88,6 +102,7 @@ Deno.serve(async (req) => {
       interviewer_name: fieldUser.name,
       company_id: fieldUser.company_id,
       status: "concluida",
+      client_uuid: clientUuid,
       answers: Array.isArray(interview.answers) ? interview.answers : [],
       latitude: typeof interview.latitude === "number" ? interview.latitude : null,
       longitude: typeof interview.longitude === "number" ? interview.longitude : null,
@@ -98,7 +113,16 @@ Deno.serve(async (req) => {
       completed_at: interview.completed_at || new Date().toISOString(),
       edit_history: [],
     }).select("id").single();
-    if (insErr) return json({ error: insErr.message }, 500);
+    if (insErr) {
+      // Corrida: dois envios simultâneos do mesmo client_uuid. O índice único
+      // barra o segundo; devolvemos o registro já gravado como sucesso.
+      if (clientUuid && (insErr.code === "23505" || /duplicate key|client_uuid/i.test(insErr.message || ""))) {
+        const { data: dup2 } = await svc.from("interviews")
+          .select("id, audio_url").eq("client_uuid", clientUuid).eq("company_id", fieldUser.company_id).limit(1);
+        if (dup2 && dup2.length > 0) return json({ id: dup2[0].id, audio_url: dup2[0].audio_url, duplicate: true });
+      }
+      return json({ error: insErr.message }, 500);
+    }
 
     return json({ id: created.id, audio_url: audioUrl });
   } catch (error) {

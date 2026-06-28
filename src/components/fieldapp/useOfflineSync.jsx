@@ -106,8 +106,14 @@ export function useOfflineSync() {
         successCount++;
         addLog("success", `"${interviewData.survey_title || "Entrevista"}" enviada com sucesso.`, _draftId);
       } catch (e) {
-        addLog("error", `Falha ao enviar "${interviewData.survey_title || "Entrevista"}": ${e.message || "erro desconhecido"}`, _draftId);
-        setDrafts(prev => prev.map(d => d._draftId === _draftId ? { ...d, _syncStatus: "error", _lastError: e.message } : d));
+        // Erros de negócio (4xx) não se resolvem com novas tentativas — ex.:
+        // pesquisa encerrada/não atribuída, limite atingido, áudio grande.
+        // Marcamos como permanente para sair da fila e não ficar reenviando
+        // para sempre; o rascunho continua visível para editar/excluir.
+        const permanent = [400, 401, 403, 404, 409, 413, 422].includes(e?.status);
+        const newStatus = permanent ? "failed_permanent" : "error";
+        addLog("error", `${permanent ? "Não enviada (precisa de ação)" : "Falha ao enviar"} "${interviewData.survey_title || "Entrevista"}": ${e.message || "erro desconhecido"}`, _draftId);
+        setDrafts(prev => prev.map(d => d._draftId === _draftId ? { ...d, _syncStatus: newStatus, _lastError: e.message } : d));
       }
     }
 
@@ -124,17 +130,18 @@ export function useOfflineSync() {
     return successCount;
   }, [isOnline, addLog]);
 
+  const hasSyncable = (list) => list.some(d => d.status === "concluida" && d._syncStatus !== "failed_permanent");
+
   // Auto-sync on reconnect
   useEffect(() => {
-    if (isOnline && drafts.some(d => d.status === "concluida")) { syncDrafts(); }
-  }, [isOnline]);  
+    if (isOnline && hasSyncable(drafts)) { syncDrafts(); }
+  }, [isOnline]);
 
   // Periodic auto-sync every 2 minutes when online and has pending completed drafts
   useEffect(() => {
     if (!isOnline) return;
     const interval = setInterval(() => {
-      const current = loadJSON(DRAFTS_KEY, []);
-      if (current.some(d => d.status === "concluida")) syncDrafts();
+      if (hasSyncable(loadJSON(DRAFTS_KEY, []))) syncDrafts();
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isOnline, syncDrafts]);
