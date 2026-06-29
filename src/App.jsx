@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
 import SetPassword from '@/components/SetPassword';
+import PendingApproval from '@/components/PendingApproval';
 
 // Rotas públicas: app dos entrevistadores (login por código, sem conta Supabase)
 const PUBLIC_PATHS = ["/FieldApp", "/InterviewerDashboard"];
@@ -53,7 +54,7 @@ const AnimatedRoute = ({ children }) => (
 );
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, needsPasswordSetup } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, needsPasswordSetup, user, isAuthenticated } = useAuth();
   const location = useLocation();
 
   const isPublic = PUBLIC_PATHS.includes(location.pathname);
@@ -85,6 +86,10 @@ const AuthenticatedApp = () => {
     if (authError) {
       if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
       if (authError.type === 'auth_required') return <Login />;
+    }
+    // Empresa ainda não aprovada (perfil inativo) -> tela de espera
+    if (isAuthenticated && user && user.active === false && !user.is_super_admin) {
+      return <PendingApproval />;
     }
   }
 
