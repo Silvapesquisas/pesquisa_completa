@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, LogIn, Map, Building2, CheckCircle2 } from "lucide-react";
+import { maskPhoneBR, maskCpfCnpj } from "@/lib/masks";
 
 // Declarado FORA do componente: se ficasse dentro, era recriado a cada tecla
 // e o React remontava os inputs, fazendo o foco se perder a cada caractere.
@@ -33,7 +34,7 @@ export default function Login() {
   const [error, setError] = useState("");
 
   // Cadastro de empresa
-  const [reg, setReg] = useState({ name: "", full_name: "", email: "", phone: "", password: "", confirm: "" });
+  const [reg, setReg] = useState({ name: "", full_name: "", email: "", phone: "", cnpj: "", password: "", confirm: "" });
   const [done, setDone] = useState(false);
 
   const submit = async (e) => {
@@ -53,7 +54,7 @@ export default function Login() {
     try {
       await base44.functions.invoke("requestCompany", {
         name: reg.name, full_name: reg.full_name, owner_email: reg.email,
-        phone: reg.phone, password: reg.password,
+        phone: reg.phone, cnpj: reg.cnpj, password: reg.password,
       });
       setDone(true);
     } catch (err) {
@@ -95,7 +96,11 @@ export default function Login() {
           </div>
           <div>
             <Label className="text-xs text-gray-500 mb-1 block">WhatsApp / Telefone</Label>
-            <Input value={reg.phone} onChange={e => setReg(p => ({ ...p, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+            <Input value={reg.phone} onChange={e => setReg(p => ({ ...p, phone: maskPhoneBR(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" maxLength={15} />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-500 mb-1 block">CNPJ ou CPF</Label>
+            <Input value={reg.cnpj} onChange={e => setReg(p => ({ ...p, cnpj: maskCpfCnpj(e.target.value) }))} placeholder="00.000.000/0001-00 ou 000.000.000-00" inputMode="numeric" maxLength={18} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
