@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, LogIn, Map, Building2, CheckCircle2 } from "lucide-react";
 import { maskPhoneBR, maskCpfCnpj } from "@/lib/masks";
+import { OWNER, ownerWhatsappLink } from "@/lib/brand";
 
 // Declarado FORA do componente: se ficasse dentro, era recriado a cada tecla
 // e o React remontava os inputs, fazendo o foco se perder a cada caractere.
@@ -70,9 +71,17 @@ export default function Login() {
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
           <p className="text-sm text-gray-700 font-medium">Cadastro enviado para análise!</p>
           <p className="text-xs text-gray-500">
-            Sua empresa foi registrada e está <strong>aguardando aprovação</strong>. Avise o responsável pela plataforma (WhatsApp) para liberar seu acesso. Assim que aprovado, você entra com o e-mail e a senha cadastrados.
+            Sua empresa foi registrada e está <strong>aguardando aprovação</strong>. Fale com a plataforma pelo WhatsApp abaixo para liberar o acesso — é por esse canal que se faz a <strong>negociação do plano de adesão e todos os fechamentos</strong>. Assim que aprovado, entre com o e-mail e a senha cadastrados.
           </p>
+          <a
+            href={ownerWhatsappLink(`Olá! Cadastrei a empresa "${reg.name || ""}" e gostaria de liberar o acesso / negociar o plano.`)}
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5"
+          >
+            Falar no WhatsApp {OWNER.whatsappDisplay}
+          </a>
           <Button variant="outline" className="w-full" onClick={() => { setDone(false); setMode("login"); }}>Voltar ao login</Button>
+          <p className="text-[10px] text-gray-400">{OWNER.name} · CNPJ {OWNER.cnpj}</p>
         </div>
       </Shell>
     );
