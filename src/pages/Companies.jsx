@@ -92,6 +92,8 @@ export default function Companies() {
     setSaving(true);
     // Campos básicos que qualquer admin da empresa pode editar
     const data = { name: form.name, owner_email: form.owner_email, plan: form.plan, phone: form.phone, cnpj: form.cnpj, logo_url: form.logo_url || null };
+    // Empresa criada manualmente pelo super-admin já nasce aprovada (ativa)
+    if (!editTarget) data.status = "active";
     // Limites só são enviados pelo super-admin (e protegidos por RLS no servidor)
     if (isSuperAdmin) {
       data.max_interviewers = clampFieldUsers(form.max_interviewers);
@@ -125,8 +127,31 @@ export default function Companies() {
   };
 
   const planColor = { basico: "secondary", profissional: "default", enterprise: "destructive" };
+  const STATUS = {
+    pending: { label: "Aguardando aprovação", cls: "bg-amber-100 text-amber-700" },
+    rejected: { label: "Reprovada", cls: "bg-red-100 text-red-700" },
+    active: { label: "Ativa", cls: "bg-green-100 text-green-700" },
+  };
 
   const getUserCount = (co) => users.filter(u => u.company_id === co.id).length;
+
+  // Aprovação/reprovação (somente super-admin). Ativa/inativa os usuários da empresa.
+  const setCompanyStatus = async (co, status) => {
+    try {
+      await base44.entities.Company.update(co.id, { status });
+      const companyUsers = users.filter(u => u.company_id === co.id);
+      await Promise.all(companyUsers.map(u => base44.entities.User.update(u.id, { active: status === "active" })));
+      load();
+    } catch (e) {
+      alert("Erro ao atualizar status: " + (e?.message || "tente novamente."));
+    }
+  };
+
+  // Ordena pendentes primeiro (visibilidade do super-admin)
+  const orderedCompanies = [...companies].sort((a, b) => {
+    const rank = s => (s === "pending" ? 0 : s === "rejected" ? 1 : 2);
+    return rank(a.status) - rank(b.status);
+  });
 
   const assignUserToCompany = async (userId, companyId) => {
     await base44.entities.User.update(userId, { company_id: companyId });
@@ -140,7 +165,7 @@ export default function Companies() {
           <h1 className="text-2xl font-bold text-gray-900">Empresas</h1>
           <p className="text-gray-500 text-sm mt-1">{companies.length} empresa(s) cadastrada(s)</p>
         </div>
-        {isAdmin && (
+        {isSuperAdmin && (
           <Button className="bg-blue-600 hover:bg-blue-700" onClick={openNew}>
             <Plus className="w-4 h-4 mr-2" /> Nova Empresa
           </Button>
@@ -154,13 +179,13 @@ export default function Companies() {
           <CardContent className="p-10 text-center">
             <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-400 text-sm">Nenhuma empresa cadastrada ainda.</p>
-            {isAdmin && <Button className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Criar Empresa</Button>}
+            {isSuperAdmin && <Button className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Criar Empresa</Button>}
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {companies.map(co => (
-            <Card key={co.id} className="border-0 shadow-sm">
+          {orderedCompanies.map(co => (
+            <Card key={co.id} className={`border-0 shadow-sm ${co.status === "pending" ? "ring-2 ring-amber-300" : ""}`}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -173,6 +198,9 @@ export default function Companies() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {co.status && co.status !== "active" && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[co.status]?.cls}`}>{STATUS[co.status]?.label}</span>
+                    )}
                     <Badge variant={planColor[co.plan] || "outline"} className="text-xs capitalize">{co.plan}</Badge>
                     {isAdmin && (
                       <Button size="sm" variant="ghost" onClick={() => openEdit(co)}>
@@ -193,6 +221,20 @@ export default function Companies() {
                 </div>
                 {co.phone && <p className="text-xs text-gray-400">Tel: {co.phone}</p>}
                 {co.cnpj && <p className="text-xs text-gray-400">CNPJ: {co.cnpj}</p>}
+
+                {/* Aprovação — somente super-admin, para empresas não aprovadas */}
+                {isSuperAdmin && co.status !== "active" && (
+                  <div className="mt-3 pt-3 border-t flex gap-2">
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => setCompanyStatus(co, "active")}>
+                      Aprovar
+                    </Button>
+                    {co.status === "pending" && (
+                      <Button size="sm" variant="outline" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => setCompanyStatus(co, "rejected")}>
+                        Reprovar
+                      </Button>
+                    )}
+                  </div>
+                )}
                 {/* Unlinked users — only shown to super-admin */}
                 {isAdmin && (() => {
                   const unlinked = users.filter(u => !u.company_id);
