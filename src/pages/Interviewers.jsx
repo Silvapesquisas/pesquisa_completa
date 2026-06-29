@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { maskPhoneBR } from "@/lib/masks";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -321,7 +322,7 @@ export default function Interviewers() {
               </div>
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Telefone</Label>
-                <Input value={newForm.phone} onChange={e => setNewForm(p => ({ ...p, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+                <Input value={newForm.phone} onChange={e => setNewForm(p => ({ ...p, phone: maskPhoneBR(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" maxLength={15} />
               </div>
             </div>
             <div>
@@ -365,7 +366,7 @@ export default function Interviewers() {
               </div>
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Telefone</Label>
-                <Input value={editData.phone || ""} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+                <Input value={editData.phone || ""} onChange={e => setEditData(p => ({ ...p, phone: maskPhoneBR(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" maxLength={15} />
               </div>
             </div>
             <div>

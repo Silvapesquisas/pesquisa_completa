@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Plus, Pencil, Users, Shield, CalendarClock } from "lucide-react";
+import { maskPhoneBR, maskCpfCnpj } from "@/lib/masks";
 
 // Limite de usuários externos (entrevistadores do App de Campo): entre 4 e 25
 const MIN_FIELD_USERS = 4;
@@ -330,12 +331,12 @@ export default function Companies() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs text-gray-500 mb-1 block">Telefone</Label>
-                <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+                <Label className="text-xs text-gray-500 mb-1 block">Telefone / WhatsApp</Label>
+                <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: maskPhoneBR(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="numeric" maxLength={15} />
               </div>
               <div>
-                <Label className="text-xs text-gray-500 mb-1 block">CNPJ</Label>
-                <Input value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" />
+                <Label className="text-xs text-gray-500 mb-1 block">CNPJ / CPF</Label>
+                <Input value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: maskCpfCnpj(e.target.value) }))} placeholder="00.000.000/0001-00 ou 000.000.000-00" inputMode="numeric" maxLength={18} />
               </div>
             </div>
             <div>
