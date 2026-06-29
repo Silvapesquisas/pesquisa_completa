@@ -6,6 +6,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, LogIn, Map, Building2, CheckCircle2 } from "lucide-react";
 
+// Declarado FORA do componente: se ficasse dentro, era recriado a cada tecla
+// e o React remontava os inputs, fazendo o foco se perder a cada caractere.
+function Shell({ subtitle, children }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center p-6">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 space-y-5">
+        <div className="text-center">
+          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Map className="w-7 h-7 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">Entrevista Pro</h1>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function Login() {
   const [mode, setMode] = useState("login"); // login | register
   const [email, setEmail] = useState("");
@@ -43,24 +62,9 @@ export default function Login() {
     setLoading(false);
   };
 
-  const Shell = ({ children }) => (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 space-y-5">
-        <div className="text-center">
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <Map className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">Entrevista Pro</h1>
-          <p className="text-sm text-gray-500 mt-1">{mode === "login" ? "Acesso ao painel de gestão" : "Cadastro de nova empresa"}</p>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-
   if (done) {
     return (
-      <Shell>
+      <Shell subtitle="Cadastro de nova empresa">
         <div className="text-center space-y-3">
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
           <p className="text-sm text-gray-700 font-medium">Cadastro enviado para análise!</p>
@@ -75,7 +79,7 @@ export default function Login() {
 
   if (mode === "register") {
     return (
-      <Shell>
+      <Shell subtitle="Cadastro de nova empresa">
         <form onSubmit={submitRegister} className="space-y-3">
           <div>
             <Label className="text-xs text-gray-500 mb-1 block">Nome da empresa *</Label>
@@ -116,7 +120,7 @@ export default function Login() {
   }
 
   return (
-    <Shell>
+    <Shell subtitle="Acesso ao painel de gestão">
       <form onSubmit={submit} className="space-y-3">
         <div>
           <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>
