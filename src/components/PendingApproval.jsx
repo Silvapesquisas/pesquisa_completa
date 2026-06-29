@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Clock } from "lucide-react";
+import { Clock, MessageCircle } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { OWNER, ownerWhatsappLink } from "@/lib/brand";
 
 // Exibida quando o usuário está autenticado mas a empresa ainda não foi
 // aprovada pelo super-admin (perfil inativo).
@@ -17,9 +18,17 @@ export default function PendingApproval() {
           O cadastro de <strong>{user?.email}</strong> está aguardando aprovação do responsável pela plataforma.
         </p>
         <p className="text-xs text-gray-500">
-          Avise pelo WhatsApp para agilizar. Assim que sua empresa for aprovada, basta entrar novamente com o mesmo e-mail e senha.
+          Para agilizar a liberação, fale com a plataforma pelo WhatsApp abaixo. É por esse canal que se faz a <strong>negociação do plano de adesão e todos os fechamentos</strong>. Assim que aprovado, basta entrar novamente com o mesmo e-mail e senha.
         </p>
+        <a
+          href={ownerWhatsappLink(`Olá! Acabei de cadastrar a empresa "${user?.email || ""}" e gostaria de liberar o acesso / negociar o plano.`)}
+          target="_blank" rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5"
+        >
+          <MessageCircle className="w-4 h-4" /> Falar no WhatsApp {OWNER.whatsappDisplay}
+        </a>
         <Button variant="outline" className="w-full" onClick={logout}>Sair</Button>
+        <p className="text-[10px] text-gray-400 pt-1">{OWNER.name} · CNPJ {OWNER.cnpj}</p>
       </div>
     </div>
   );

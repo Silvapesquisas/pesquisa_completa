@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Plus, Pencil, Users, Shield, CalendarClock } from "lucide-react";
 import { maskPhoneBR, maskCpfCnpj } from "@/lib/masks";
+import { OWNER, ownerWhatsappLink } from "@/lib/brand";
 
 // Limite de usuários externos (entrevistadores do App de Campo): entre 4 e 25
 const MIN_FIELD_USERS = 4;
@@ -289,7 +290,7 @@ export default function Companies() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">Plano</Label>
-                <Select value={form.plan} onValueChange={v => {
+                <Select value={form.plan} disabled={!isSuperAdmin} onValueChange={v => {
                   const p = PLANS.find(pl => pl.value === v);
                   setForm(prev => ({ ...prev, plan: v, max_interviewers: clampFieldUsers(p?.limit || MIN_FIELD_USERS) }));
                 }}>
@@ -325,9 +326,16 @@ export default function Companies() {
               <p className="text-[10px] text-gray-400 mt-1">Deixe em branco para não limitar. Você define a quantidade máxima.</p>
             </div>
             {!isSuperAdmin && (
-              <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-                Apenas o super-admin da plataforma pode alterar os limites de usuários externos e de entrevistas por mês.
-              </p>
+              <div className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 space-y-2">
+                <p>O plano e os limites (usuários externos e entrevistas/mês) só são alterados pela plataforma. Você pode <strong>solicitar a mudança de plano</strong> — após a negociação, a alteração é liberada.</p>
+                <a
+                  href={ownerWhatsappLink(`Olá! Sou responsável pela empresa "${form.name || ""}" e gostaria de solicitar mudança de plano.`)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium"
+                >
+                  Solicitar mudança de plano (WhatsApp {OWNER.whatsappDisplay})
+                </a>
+              </div>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
