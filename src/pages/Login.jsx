@@ -156,6 +156,15 @@ export default function Login() {
         <p className="text-xs text-gray-400 text-center">
           É entrevistador de campo? <a href="/FieldApp" className="text-blue-600 hover:underline">Acesse o App de Campo</a> com seu código.
         </p>
+        <div className="pt-2 border-t text-center space-y-0.5">
+          <p className="text-[11px] text-gray-500">
+            Adesão e negociação de planos:{" "}
+            <a href={ownerWhatsappLink("Olá! Quero contratar/conhecer a plataforma de pesquisas.")} target="_blank" rel="noopener noreferrer" className="text-green-600 font-medium hover:underline">
+              WhatsApp {OWNER.whatsappDisplay}
+            </a>
+          </p>
+          <p className="text-[10px] text-gray-400">{OWNER.name} · CNPJ {OWNER.cnpj}</p>
+        </div>
       </div>
     </Shell>
   );

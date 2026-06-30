@@ -9,6 +9,7 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import NoCompanyWarning from "@/components/NoCompanyWarning";
+import { OWNER, ownerWhatsappLink } from "@/lib/brand";
 
 const navItems = [
   { label: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
@@ -179,8 +180,21 @@ export default function Layout({ children, currentPageName }) {
       </div>
 
       {/* Main content — offset for mobile top bar and bottom nav */}
-      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
-        {children}
+      <main className="flex-1 lg:ml-60 pt-14 lg:pt-0 min-h-screen pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0 flex flex-col">
+        <div className="flex-1">{children}</div>
+        <footer className="border-t border-gray-100 px-6 py-4 text-center text-[11px] text-gray-400 space-y-1">
+          <p>
+            Suporte, adesão e <strong>negociação de planos / fechamentos</strong>:{" "}
+            <a
+              href={ownerWhatsappLink("Olá! Preciso falar sobre a plataforma de pesquisas (suporte / plano).")}
+              target="_blank" rel="noopener noreferrer"
+              className="text-green-600 font-medium hover:underline"
+            >
+              WhatsApp {OWNER.whatsappDisplay}
+            </a>
+          </p>
+          <p>Plataforma desenvolvida por <span className="font-medium text-gray-500">{OWNER.name}</span> · CNPJ {OWNER.cnpj}</p>
+        </footer>
       </main>
 
       {/* Mobile bottom navigation */}
