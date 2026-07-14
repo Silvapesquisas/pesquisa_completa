@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Building2, Plus, Pencil, Users, Shield, CalendarClock } from "lucide-react";
+import { Building2, Plus, Pencil, Users, Shield, CalendarClock, KeyRound, Copy } from "lucide-react";
 import { maskPhoneBR, maskCpfCnpj } from "@/lib/masks";
 import { OWNER, ownerWhatsappLink } from "@/lib/brand";
 
@@ -33,6 +33,10 @@ export default function Companies() {
   const [form, setForm] = useState({ name: "", owner_email: "", plan: "basico", max_interviewers: 5, max_interviews_per_month: "", phone: "", cnpj: "", logo_url: "" });
   const [inviteOwner, setInviteOwner] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Senha temporária do gestor da empresa
+  const [resetInfo, setResetInfo] = useState(null); // { email, company, pass }
+  const [resetting, setResetting] = useState(false);
 
   const load = async () => {
     const me = await base44.auth.me();
@@ -137,6 +141,37 @@ export default function Companies() {
 
   const getUserCount = (co) => users.filter(u => u.company_id === co.id).length;
 
+  // Gestor da empresa: preferencialmente o do e-mail cadastrado; senão o admin.
+  const companyAdminUser = (co) => {
+    const list = users.filter(u => u.company_id === co.id);
+    return list.find(u => u.email === co.owner_email) || list.find(u => u.role === "admin") || list[0] || null;
+  };
+
+  const genTempPassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    let p = "";
+    for (let i = 0; i < 8; i++) p += chars[Math.floor(Math.random() * chars.length)];
+    return p;
+  };
+
+  const generateCompanyPassword = async (co) => {
+    const u = companyAdminUser(co);
+    if (!u) {
+      alert("Nenhum gestor vinculado a esta empresa ainda. Convide/cadastre o gestor (o e-mail informado) antes de gerar a senha.");
+      return;
+    }
+    if (!confirm(`Gerar senha temporária para ${u.email} (empresa ${co.name})? A senha atual dele(a) deixará de funcionar.`)) return;
+    setResetting(true);
+    const pass = genTempPassword();
+    try {
+      await base44.users.setPassword(u.id, pass);
+      setResetInfo({ email: u.email, company: co.name, pass });
+    } catch (e) {
+      alert("Erro ao gerar senha: " + (e?.message || "tente novamente."));
+    }
+    setResetting(false);
+  };
+
   // Aprovação/reprovação (somente super-admin). Ativa/inativa os usuários da empresa.
   const setCompanyStatus = async (co, status) => {
     try {
@@ -204,6 +239,11 @@ export default function Companies() {
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS[co.status]?.cls}`}>{STATUS[co.status]?.label}</span>
                     )}
                     <Badge variant={planColor[co.plan] || "outline"} className="text-xs capitalize">{co.plan}</Badge>
+                    {isAdmin && co.status !== "rejected" && (
+                      <Button size="sm" variant="ghost" onClick={() => generateCompanyPassword(co)} disabled={resetting} title="Gerar senha temporária do gestor">
+                        <KeyRound className="w-4 h-4 text-amber-500" />
+                      </Button>
+                    )}
                     {isAdmin && (
                       <Button size="sm" variant="ghost" onClick={() => openEdit(co)}>
                         <Pencil className="w-4 h-4 text-gray-400" />
@@ -365,6 +405,40 @@ export default function Companies() {
               {saving ? "Salvando..." : editTarget ? "Salvar Alterações" : "Criar Empresa"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Senha temporária do gestor */}
+      <Dialog open={!!resetInfo} onOpenChange={o => { if (!o) setResetInfo(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Senha temporária gerada</DialogTitle></DialogHeader>
+          {resetInfo && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Acesso do gestor da empresa <strong>{resetInfo.company}</strong>. Envie por WhatsApp; ele entra com o <strong>e-mail cadastrado</strong> e esta senha.
+              </p>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1 block">E-mail de acesso</Label>
+                  <code className="block text-sm font-mono bg-gray-100 rounded-lg px-3 py-2 break-all">{resetInfo.email}</code>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1 block">Senha temporária</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-lg font-mono font-bold text-center bg-gray-100 rounded-lg py-3 tracking-wide">{resetInfo.pass}</code>
+                    <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(resetInfo.pass)} title="Copiar senha"><Copy className="w-4 h-4" /></Button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                Oriente o gestor a entrar e, em <strong>Configurações → Alterar senha</strong>, definir a senha própria dele.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => navigator.clipboard?.writeText(`Acesso à plataforma:\nE-mail: ${resetInfo.email}\nSenha temporária: ${resetInfo.pass}\nEntre e troque a senha em Configurações.`)}>Copiar tudo</Button>
+                <Button className="flex-1" onClick={() => setResetInfo(null)}>Fechar</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
