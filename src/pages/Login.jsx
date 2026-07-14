@@ -28,7 +28,7 @@ function Shell({ subtitle, children }) {
 }
 
 export default function Login() {
-  const [mode, setMode] = useState("login"); // login | register
+  const [mode, setMode] = useState("login"); // login | register | recover
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,6 +37,23 @@ export default function Login() {
   // Cadastro de empresa
   const [reg, setReg] = useState({ name: "", full_name: "", email: "", phone: "", cnpj: "", password: "", confirm: "" });
   const [done, setDone] = useState(false);
+
+  // Recuperação de senha
+  const [recoverEmail, setRecoverEmail] = useState("");
+  const [recoverSent, setRecoverSent] = useState(false);
+
+  const submitRecover = async (e) => {
+    e?.preventDefault();
+    setError("");
+    setLoading(true);
+    // O link do e-mail volta para o app; a tela "Definir senha" trata o token.
+    const { error: err } = await supabase.auth.resetPasswordForEmail(recoverEmail.trim(), {
+      redirectTo: window.location.origin,
+    });
+    setLoading(false);
+    if (err) { setError("Não foi possível enviar. Verifique o e-mail e tente novamente."); return; }
+    setRecoverSent(true);
+  };
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -133,6 +150,38 @@ export default function Login() {
     );
   }
 
+  if (mode === "recover") {
+    return (
+      <Shell subtitle="Recuperar senha">
+        {recoverSent ? (
+          <div className="text-center space-y-3">
+            <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+            <p className="text-sm text-gray-700 font-medium">E-mail enviado!</p>
+            <p className="text-xs text-gray-500">
+              Se houver uma conta com <strong>{recoverEmail}</strong>, você receberá um link para <strong>definir uma nova senha</strong>. Verifique também a caixa de spam.
+            </p>
+            <Button variant="outline" className="w-full" onClick={() => { setMode("login"); setRecoverSent(false); setError(""); }}>Voltar ao login</Button>
+          </div>
+        ) : (
+          <form onSubmit={submitRecover} className="space-y-3">
+            <p className="text-xs text-gray-500">Digite seu e-mail. Enviaremos um link para você criar uma nova senha.</p>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>
+              <Input type="email" value={recoverEmail} onChange={e => setRecoverEmail(e.target.value)} placeholder="voce@empresa.com" autoComplete="email" required />
+            </div>
+            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700" disabled={loading || !recoverEmail}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar link de recuperação"}
+            </Button>
+            <button type="button" onClick={() => { setMode("login"); setError(""); }} className="w-full text-xs text-gray-400 hover:text-blue-600">
+              Voltar ao login
+            </button>
+          </form>
+        )}
+      </Shell>
+    );
+  }
+
   return (
     <Shell subtitle="Acesso ao painel de gestão">
       <form onSubmit={submit} className="space-y-3">
@@ -148,6 +197,9 @@ export default function Login() {
         <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700" disabled={loading || !email || !password}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><LogIn className="w-4 h-4 mr-2" /> Entrar</>}
         </Button>
+        <button type="button" onClick={() => { setMode("recover"); setRecoverEmail(email); setError(""); }} className="w-full text-xs text-gray-500 hover:text-blue-600">
+          Esqueci minha senha
+        </button>
       </form>
       <div className="space-y-2">
         <button onClick={() => { setMode("register"); setError(""); }} className="w-full text-sm font-medium text-blue-600 hover:underline flex items-center justify-center gap-1">
