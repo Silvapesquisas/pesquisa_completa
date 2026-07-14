@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, UserCheck, UserX, Mail } from "lucide-react";
+import { Search, Plus, UserCheck, UserX, Mail, KeyRound, Copy } from "lucide-react";
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -21,6 +21,11 @@ export default function Users() {
 
   const [currentUser, setCurrentUser] = useState(null);
   const [companies, setCompanies] = useState([]);
+
+  // Redefinição de senha (senha temporária gerada pelo admin)
+  const [resetTarget, setResetTarget] = useState(null);
+  const [tempPassword, setTempPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const load = async () => {
     const me = await base44.auth.me();
@@ -53,6 +58,29 @@ export default function Users() {
     if (!canManage(u)) { alert("Você não tem permissão para gerenciar este usuário."); return; }
     await base44.entities.User.update(u.id, { active: !u.active });
     load();
+  };
+
+  // Gera uma senha temporária legível (sem caracteres ambíguos).
+  const genTempPassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    let p = "";
+    for (let i = 0; i < 8; i++) p += chars[Math.floor(Math.random() * chars.length)];
+    return p;
+  };
+
+  const resetPassword = async (u) => {
+    if (!canManage(u)) { alert("Você não tem permissão para gerenciar este usuário."); return; }
+    if (!confirm(`Gerar uma senha temporária para ${u.full_name || u.email}? A senha atual dele(a) deixará de funcionar.`)) return;
+    setResetting(true);
+    const pass = genTempPassword();
+    try {
+      await base44.users.setPassword(u.id, pass);
+      setResetTarget(u);
+      setTempPassword(pass);
+    } catch (e) {
+      alert("Erro ao redefinir senha: " + (e?.message || "tente novamente."));
+    }
+    setResetting(false);
   };
 
   const updateRole = async (u, role) => {
@@ -155,6 +183,11 @@ export default function Users() {
                       <SelectItem value="entrevistador">Entrevistador</SelectItem>
                     </SelectContent>
                   </Select>
+                  {canManage(u) && (
+                    <Button size="sm" variant="ghost" onClick={() => resetPassword(u)} disabled={resetting} title="Gerar senha temporária">
+                      <KeyRound className="w-4 h-4 text-amber-500" />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
                     {u.active === false ? <UserCheck className="w-4 h-4 text-green-500" /> : <UserX className="w-4 h-4 text-red-400" />}
                   </Button>
@@ -202,6 +235,28 @@ export default function Users() {
             <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={invite} disabled={inviting}>
               <Mail className="w-4 h-4 mr-2" /> {inviting ? "Enviando convite..." : "Enviar Convite por E-mail"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Senha temporária gerada */}
+      <Dialog open={!!resetTarget} onOpenChange={o => { if (!o) { setResetTarget(null); setTempPassword(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Senha temporária gerada</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Nova senha temporária de <strong>{resetTarget?.full_name || resetTarget?.email}</strong>. Repasse com segurança (ex.: WhatsApp).
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-lg font-mono font-bold text-center bg-gray-100 rounded-lg py-3 tracking-wide">{tempPassword}</code>
+              <Button size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(tempPassword); }} title="Copiar">
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              Oriente o usuário a entrar com esta senha e, em <strong>Configurações → Alterar senha</strong>, definir uma senha própria.
+            </p>
+            <Button className="w-full" onClick={() => { setResetTarget(null); setTempPassword(""); }}>Fechar</Button>
           </div>
         </DialogContent>
       </Dialog>

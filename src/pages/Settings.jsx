@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, User, Trash2, LogOut, ChevronRight } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, User, Trash2, LogOut, ChevronRight, KeyRound, CheckCircle2 } from "lucide-react";
 
 export default function Settings() {
   const [user, setUser] = useState(null);
@@ -11,6 +13,25 @@ export default function Settings() {
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+
+  // Alterar senha
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [savingPass, setSavingPass] = useState(false);
+  const [passMsg, setPassMsg] = useState("");
+  const [passErr, setPassErr] = useState("");
+
+  const changePassword = async () => {
+    setPassErr(""); setPassMsg("");
+    if (newPass.length < 6) { setPassErr("A senha deve ter ao menos 6 caracteres."); return; }
+    if (newPass !== confirmPass) { setPassErr("As senhas não conferem."); return; }
+    setSavingPass(true);
+    const { error: err } = await supabase.auth.updateUser({ password: newPass });
+    setSavingPass(false);
+    if (err) { setPassErr(err.message || "Não foi possível alterar a senha."); return; }
+    setNewPass(""); setConfirmPass("");
+    setPassMsg("Senha alterada com sucesso!");
+  };
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => null);
@@ -56,6 +77,36 @@ export default function Settings() {
           </CardContent>
         </Card>
       )}
+
+      {/* Alterar senha */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <KeyRound className="w-4 h-4" /> Alterar senha
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Recebeu uma senha temporária? Defina aqui a sua senha de acesso.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Nova senha</Label>
+              <Input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 mb-1 block">Confirmar nova senha</Label>
+              <Input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder="Repita a senha" autoComplete="new-password"
+                onKeyDown={e => e.key === "Enter" && changePassword()} />
+            </div>
+          </div>
+          {passErr && <p className="text-xs text-red-500">{passErr}</p>}
+          {passMsg && <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {passMsg}</p>}
+          <Button className="bg-blue-600 hover:bg-blue-700" onClick={changePassword} disabled={savingPass || !newPass || !confirmPass}>
+            {savingPass ? "Salvando..." : "Salvar nova senha"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Logout */}
       <Card className="border-0 shadow-sm">
