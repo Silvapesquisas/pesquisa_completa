@@ -400,7 +400,7 @@ export default function SurveyBuilder() {
               <Select value={survey.category} onValueChange={val => setSurvey(s => ({ ...s, category: val }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["urbano", "rural", "ambiental", "social", "mercado", "outro"].map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
+                  {["urbano", "rural", "ambiental", "social", "mercado", "eleitoral", "outro"].map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

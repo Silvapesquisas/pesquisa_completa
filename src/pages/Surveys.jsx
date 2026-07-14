@@ -13,7 +13,7 @@ import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const statusColor = { rascunho: "secondary", ativa: "default", pausada: "outline", encerrada: "destructive" };
-const categoryLabel = { urbano: "🏙️ Urbano", rural: "🌾 Rural", ambiental: "🌿 Ambiental", social: "👥 Social", mercado: "📊 Mercado", outro: "📋 Outro" };
+const categoryLabel = { urbano: "🏙️ Urbano", rural: "🌾 Rural", ambiental: "🌿 Ambiental", social: "👥 Social", mercado: "📊 Mercado", eleitoral: "🗳️ Eleitoral", outro: "📋 Outro" };
 
 export default function Surveys() {
   const [surveys, setSurveys] = useState([]);
