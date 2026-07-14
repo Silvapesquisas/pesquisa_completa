@@ -147,6 +147,10 @@ const users = {
   inviteUser(email, role, companyId) {
     return invokeFunction("inviteUser", { email, role, company_id: companyId });
   },
+  // Define uma senha (temporária) para outro usuário — admin/super-admin.
+  setPassword(userId, password) {
+    return invokeFunction("setUserPassword", { user_id: userId, password });
+  },
 };
 
 export const base44 = {
