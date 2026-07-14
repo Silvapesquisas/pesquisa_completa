@@ -9,8 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Search, Filter, MapPin, Mic, FileText, ChevronDown, ChevronUp,
-  Plus, Trash2, X, Eye, Download, Loader2
+  Plus, Trash2, X, Eye, Download, Loader2, FileSpreadsheet, FileType
 } from "lucide-react";
+import { exportRawXLSX } from "@/components/reports/rawExport";
+import { buildReportModel } from "@/components/reports/reportData";
+import { generateDOCX } from "@/components/reports/docxExport";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -247,6 +250,65 @@ export default function AdvancedReports() {
     setDateFrom(""); setDateTo(""); setCrossFilters([]); setPage(1);
   };
 
+  // Pesquisa "efetiva" para exportações: a do filtro básico ou a do filtro cruzado.
+  const exportSurvey = useMemo(() => {
+    const id = filterSurvey !== "todos" ? filterSurvey : (selectedCrossSurvey !== "todos" ? selectedCrossSurvey : null);
+    return id ? surveys.find(s => s.id === id) || null : null;
+  }, [filterSurvey, selectedCrossSurvey, surveys]);
+
+  const [exporting, setExporting] = useState(false);
+
+  // Descrição dos filtros/cruzamentos aplicados (vai na aba "Informações" do Excel)
+  const buildFiltersInfo = () => {
+    const validCross = crossFilters.filter(cf => cf.question_id && cf.answer);
+    const crossDesc = validCross.map(cf => {
+      const q = crossSurveyQuestions.find(x => x.id === cf.question_id);
+      return `${q?.text || "questão"} = ${cf.answer}`;
+    }).join(" E ");
+    return [
+      { "Campo": "Pesquisa", "Valor": exportSurvey?.title || "Todas" },
+      { "Campo": "Busca por texto", "Valor": searchText || "—" },
+      { "Campo": "Entrevistador", "Valor": filterInterviewer === "todos" ? "Todos" : filterInterviewer },
+      { "Campo": "Status", "Valor": filterStatus },
+      { "Campo": "Geo / Áudio", "Valor": `${filterGeo} / ${filterAudio}` },
+      { "Campo": "Período", "Valor": `${dateFrom || "—"} a ${dateTo || "—"}` },
+      { "Campo": "Filtro cruzado (AND)", "Valor": crossDesc || "—" },
+    ];
+  };
+
+  // Excel: dados brutos do conjunto filtrado/cruzado atual.
+  const exportXLSX = () => {
+    if (filtered.length === 0) { alert("Nenhuma entrevista nos filtros atuais."); return; }
+    exportRawXLSX({
+      surveyObj: exportSurvey,
+      interviews: filtered,
+      filtersInfo: buildFiltersInfo(),
+      fileLabel: exportSurvey?.title || "cruzamento",
+    });
+  };
+
+  // DOCX: relatório com resultados (e cruzamentos sexo/idade) do conjunto filtrado.
+  const exportDOCX = async () => {
+    if (filtered.length === 0) { alert("Nenhuma entrevista nos filtros atuais."); return; }
+    if (!exportSurvey) { alert("Selecione uma pesquisa (no filtro básico ou no filtro cruzado) para gerar o DOCX por questão."); return; }
+    setExporting(true);
+    try {
+      const model = buildReportModel({
+        surveyObj: exportSurvey,
+        interviews: filtered.filter(i => i.survey_id === exportSurvey.id),
+        options: { includeCrosstabs: true },
+      });
+      await generateDOCX(model, {
+        template: "eleitoral",
+        chartType: "bar",
+        sections: { metodologia: true, resultados: true, cruzamentos: true, mapa: false, analise: false },
+      });
+    } catch (e) {
+      alert("Erro ao gerar DOCX: " + (e?.message || "tente novamente."));
+    }
+    setExporting(false);
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -254,9 +316,17 @@ export default function AdvancedReports() {
           <h1 className="text-2xl font-bold text-gray-900">Relatório Avançado</h1>
           <p className="text-gray-500 text-sm mt-1">Histórico completo de entrevistas com filtros combinados</p>
         </div>
-        <Badge variant="secondary" className="text-sm px-3 py-1">
-          {filtered.length} entrevistas
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Badge variant="secondary" className="text-sm px-3 py-1">
+            {filtered.length} entrevistas
+          </Badge>
+          <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={exportXLSX} disabled={exporting || filtered.length === 0}>
+            <FileSpreadsheet className="w-4 h-4 mr-1" /> Excel (dados brutos)
+          </Button>
+          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={exportDOCX} disabled={exporting || filtered.length === 0}>
+            {exporting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileType className="w-4 h-4 mr-1" />} DOCX
+          </Button>
+        </div>
       </div>
 
       {/* Basic Filters */}

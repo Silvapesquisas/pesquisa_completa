@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Loader2, BarChart2, Map, PieChart, Users, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
-import * as XLSX from "xlsx";
+import { exportRawXLSX } from "@/components/reports/rawExport";
 import { format, isAfter, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChartCard, PieChartCard } from "@/components/reports/InterviewCharts";
@@ -132,86 +132,26 @@ export default function Reports() {
     return [...set];
   })();
 
-  // Dados brutos em Excel: 1 aba com uma linha por entrevista (colunas = questões
-  // escolhidas), 1 aba com o somatório por questão e 1 aba de informações.
-  // Respeita a seleção de entrevistas e de questões do construtor.
+  // Dados brutos em Excel (módulo compartilhado). Respeita a seleção de
+  // entrevistas e de questões do construtor.
   const exportXLSX = () => {
     if (effective.length === 0) { alert("Nenhuma entrevista selecionada para exportar."); return; }
-    const includedQs = surveyObj?.questions ? surveyObj.questions.filter(q => !excludedQ.includes(q.id)) : [];
-    const answerOf = (iv, qid) => {
-      const a = (iv.answers || []).find(x => x.question_id === qid);
-      if (!a) return "";
-      return a.answer_array?.length ? a.answer_array.join("; ") : (a.answer || "");
-    };
-
-    const rawRows = effective.map((iv, idx) => {
-      const row = {
-        "#": idx + 1,
-        "Pesquisa": iv.survey_title || "",
-        "Entrevistador": iv.interviewer_name || "",
-        "Data": iv.completed_at ? format(new Date(iv.completed_at), "dd/MM/yyyy HH:mm") : "",
-        "Status": iv.status || "",
-        "Latitude": iv.latitude ?? "",
-        "Longitude": iv.longitude ?? "",
-        "Áudio": iv.audio_url ? "Sim" : "Não",
-        "Observações": iv.notes || "",
-      };
-      if (includedQs.length) {
-        includedQs.forEach((q, qi) => { row[`Q${qi + 1}. ${q.text}`] = answerOf(iv, q.id); });
-      } else {
-        // Sem pesquisa específica: usa o texto da questão gravado em cada resposta
-        (iv.answers || []).forEach((a, ai) => {
-          row[a.question_text || `Questão ${ai + 1}`] = a.answer_array?.length ? a.answer_array.join("; ") : (a.answer || "");
-        });
-      }
-      return row;
-    });
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rawRows), "Dados brutos");
-
-    if (includedQs.length) {
-      const summaryRows = [];
-      includedQs.forEach((q, qi) => {
-        const counts = {};
-        let qTotal = 0;
-        effective.forEach(iv => {
-          const a = (iv.answers || []).find(x => x.question_id === q.id);
-          if (!a) return;
-          const vals = (a.answer_array?.length ? a.answer_array : [a.answer]).filter(Boolean);
-          if (vals.length) qTotal++;
-          vals.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
-        });
-        Object.entries(counts).sort((x, y) => y[1] - x[1]).forEach(([opt, n]) => {
-          summaryRows.push({
-            "Questão": `Q${qi + 1}. ${q.text}`,
-            "Resposta": opt,
-            "Qtd": n,
-            "%": qTotal > 0 ? Number(((n / qTotal) * 100).toFixed(1)) : 0,
-            "Respondentes": qTotal,
-          });
-        });
-      });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Somatório por questão");
-    }
-
     const filterQText = filterQuestion !== "todas"
       ? surveyObj?.questions?.find(q => q.id === filterQuestion)?.text || "—"
       : "—";
-    const infoRows = [
-      { "Campo": "Pesquisa", "Valor": surveyObj?.title || "Todas" },
-      { "Campo": "Entrevistas exportadas", "Valor": effective.length },
-      { "Campo": "Entrevistas no filtro", "Valor": filtered.length },
-      { "Campo": "Questões incluídas", "Valor": includedQs.length ? `${includedQs.length} de ${surveyObj.questions.length}` : "Todas" },
-      { "Campo": "Período", "Valor": `${dateFrom || "—"} a ${dateTo || "—"}` },
-      { "Campo": "Entrevistador", "Valor": selectedInterviewer === "todos" ? "Todos" : selectedInterviewer },
-      { "Campo": "Status", "Valor": selectedStatus },
-      { "Campo": "Recorte por resposta", "Valor": filterQuestion === "todas" ? "—" : `${filterQText} = ${filterAnswer === "todas" ? "todas" : filterAnswer}` },
-      { "Campo": "Gerado em", "Valor": format(new Date(), "dd/MM/yyyy HH:mm") },
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(infoRows), "Informações");
-
-    XLSX.writeFile(wb, `dados-brutos-${(surveyObj?.title || "pesquisas").slice(0, 25).replace(/\s+/g, "-")}-${format(new Date(), "yyyyMMdd-HHmm")}.xlsx`);
+    exportRawXLSX({
+      surveyObj,
+      interviews: effective,
+      includedQuestionIds: surveyObj?.questions ? surveyObj.questions.filter(q => !excludedQ.includes(q.id)).map(q => q.id) : undefined,
+      filtersInfo: [
+        { "Campo": "Pesquisa", "Valor": surveyObj?.title || "Todas" },
+        { "Campo": "Entrevistas no filtro", "Valor": filtered.length },
+        { "Campo": "Período", "Valor": `${dateFrom || "—"} a ${dateTo || "—"}` },
+        { "Campo": "Entrevistador", "Valor": selectedInterviewer === "todos" ? "Todos" : selectedInterviewer },
+        { "Campo": "Status", "Valor": selectedStatus },
+        { "Campo": "Recorte por resposta", "Valor": filterQuestion === "todas" ? "—" : `${filterQText} = ${filterAnswer === "todas" ? "todas" : filterAnswer}` },
+      ],
+    });
   };
 
   const buildAiText = async (model) => {
