@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Loader2, BarChart2, Map, PieChart, Users, FileType, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Loader2, BarChart2, Map, PieChart, Users, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
+import * as XLSX from "xlsx";
 import { format, isAfter, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChartCard, PieChartCard } from "@/components/reports/InterviewCharts";
@@ -35,6 +36,9 @@ export default function Reports() {
   const [selectedStatus, setSelectedStatus] = useState("concluida");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // Recorte por resposta: só entrevistas em que a questão X foi respondida com Y
+  const [filterQuestion, setFilterQuestion] = useState("todas");
+  const [filterAnswer, setFilterAnswer] = useState("todas");
   const [generating, setGenerating] = useState(false);
   const [genMsg, setGenMsg] = useState("");
   const [preview, setPreview] = useState(false);
@@ -75,7 +79,13 @@ export default function Reports() {
     const dt = i.completed_at || i.created_date;
     const matchFrom = !dateFrom || (dt && isAfter(parseISO(dt), parseISO(dateFrom)));
     const matchTo = !dateTo || (dt && isBefore(parseISO(dt), parseISO(dateTo + "T23:59:59")));
-    return matchSurvey && matchInterviewer && matchStatus && matchFrom && matchTo;
+    const matchAnswer = filterQuestion === "todas" || filterAnswer === "todas" || (() => {
+      const a = (i.answers || []).find(x => x.question_id === filterQuestion);
+      if (!a) return false;
+      const vals = a.answer_array?.length ? a.answer_array : [a.answer];
+      return vals.includes(filterAnswer);
+    })();
+    return matchSurvey && matchInterviewer && matchStatus && matchFrom && matchTo && matchAnswer;
   });
 
   // Entrevistas efetivamente incluídas no relatório (filtro − desmarcadas)
@@ -105,6 +115,104 @@ export default function Reports() {
   })();
 
   const toggle = (arr, setArr, id) => setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
+
+  // Valores possíveis para o recorte por resposta: opções da questão + o que
+  // foi de fato respondido em campo.
+  const answerOptions = (() => {
+    if (filterQuestion === "todas" || !surveyObj) return [];
+    const q = surveyObj.questions?.find(x => x.id === filterQuestion);
+    const set = new Set((q?.options || []).filter(Boolean));
+    if (q?.type === "sim_nao") { set.add("Sim"); set.add("Não"); }
+    if (q?.type === "escala") ["1", "2", "3", "4", "5"].forEach(v => set.add(v));
+    interviews.filter(i => i.survey_id === surveyObj.id).forEach(i => {
+      const a = (i.answers || []).find(x => x.question_id === filterQuestion);
+      if (!a) return;
+      (a.answer_array?.length ? a.answer_array : [a.answer]).filter(Boolean).forEach(v => set.add(v));
+    });
+    return [...set];
+  })();
+
+  // Dados brutos em Excel: 1 aba com uma linha por entrevista (colunas = questões
+  // escolhidas), 1 aba com o somatório por questão e 1 aba de informações.
+  // Respeita a seleção de entrevistas e de questões do construtor.
+  const exportXLSX = () => {
+    if (effective.length === 0) { alert("Nenhuma entrevista selecionada para exportar."); return; }
+    const includedQs = surveyObj?.questions ? surveyObj.questions.filter(q => !excludedQ.includes(q.id)) : [];
+    const answerOf = (iv, qid) => {
+      const a = (iv.answers || []).find(x => x.question_id === qid);
+      if (!a) return "";
+      return a.answer_array?.length ? a.answer_array.join("; ") : (a.answer || "");
+    };
+
+    const rawRows = effective.map((iv, idx) => {
+      const row = {
+        "#": idx + 1,
+        "Pesquisa": iv.survey_title || "",
+        "Entrevistador": iv.interviewer_name || "",
+        "Data": iv.completed_at ? format(new Date(iv.completed_at), "dd/MM/yyyy HH:mm") : "",
+        "Status": iv.status || "",
+        "Latitude": iv.latitude ?? "",
+        "Longitude": iv.longitude ?? "",
+        "Áudio": iv.audio_url ? "Sim" : "Não",
+        "Observações": iv.notes || "",
+      };
+      if (includedQs.length) {
+        includedQs.forEach((q, qi) => { row[`Q${qi + 1}. ${q.text}`] = answerOf(iv, q.id); });
+      } else {
+        // Sem pesquisa específica: usa o texto da questão gravado em cada resposta
+        (iv.answers || []).forEach((a, ai) => {
+          row[a.question_text || `Questão ${ai + 1}`] = a.answer_array?.length ? a.answer_array.join("; ") : (a.answer || "");
+        });
+      }
+      return row;
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rawRows), "Dados brutos");
+
+    if (includedQs.length) {
+      const summaryRows = [];
+      includedQs.forEach((q, qi) => {
+        const counts = {};
+        let qTotal = 0;
+        effective.forEach(iv => {
+          const a = (iv.answers || []).find(x => x.question_id === q.id);
+          if (!a) return;
+          const vals = (a.answer_array?.length ? a.answer_array : [a.answer]).filter(Boolean);
+          if (vals.length) qTotal++;
+          vals.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+        });
+        Object.entries(counts).sort((x, y) => y[1] - x[1]).forEach(([opt, n]) => {
+          summaryRows.push({
+            "Questão": `Q${qi + 1}. ${q.text}`,
+            "Resposta": opt,
+            "Qtd": n,
+            "%": qTotal > 0 ? Number(((n / qTotal) * 100).toFixed(1)) : 0,
+            "Respondentes": qTotal,
+          });
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Somatório por questão");
+    }
+
+    const filterQText = filterQuestion !== "todas"
+      ? surveyObj?.questions?.find(q => q.id === filterQuestion)?.text || "—"
+      : "—";
+    const infoRows = [
+      { "Campo": "Pesquisa", "Valor": surveyObj?.title || "Todas" },
+      { "Campo": "Entrevistas exportadas", "Valor": effective.length },
+      { "Campo": "Entrevistas no filtro", "Valor": filtered.length },
+      { "Campo": "Questões incluídas", "Valor": includedQs.length ? `${includedQs.length} de ${surveyObj.questions.length}` : "Todas" },
+      { "Campo": "Período", "Valor": `${dateFrom || "—"} a ${dateTo || "—"}` },
+      { "Campo": "Entrevistador", "Valor": selectedInterviewer === "todos" ? "Todos" : selectedInterviewer },
+      { "Campo": "Status", "Valor": selectedStatus },
+      { "Campo": "Recorte por resposta", "Valor": filterQuestion === "todas" ? "—" : `${filterQText} = ${filterAnswer === "todas" ? "todas" : filterAnswer}` },
+      { "Campo": "Gerado em", "Valor": format(new Date(), "dd/MM/yyyy HH:mm") },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(infoRows), "Informações");
+
+    XLSX.writeFile(wb, `dados-brutos-${(surveyObj?.title || "pesquisas").slice(0, 25).replace(/\s+/g, "-")}-${format(new Date(), "yyyyMMdd-HHmm")}.xlsx`);
+  };
 
   const buildAiText = async (model) => {
     const questionSummary = model.questions.map((q, i) =>
@@ -212,7 +320,7 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <Label className="text-xs text-gray-500 mb-1 block">Pesquisa</Label>
-            <Select value={selectedSurvey} onValueChange={v => { setSelectedSurvey(v); setExcludedQ([]); }}>
+            <Select value={selectedSurvey} onValueChange={v => { setSelectedSurvey(v); setExcludedQ([]); setFilterQuestion("todas"); setFilterAnswer("todas"); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas</SelectItem>
@@ -250,6 +358,33 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
             <Label className="text-xs text-gray-500 mb-1 block">Data fim</Label>
             <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
+          {surveyObj && (
+            <>
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 block">Recorte: questão</Label>
+                <Select value={filterQuestion} onValueChange={v => { setFilterQuestion(v); setFilterAnswer("todas"); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Sem recorte</SelectItem>
+                    {(surveyObj.questions || []).map((q, i) => (
+                      <SelectItem key={q.id} value={q.id}>Q{i + 1}. {q.text.slice(0, 45)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500 mb-1 block">Recorte: resposta</Label>
+                <Select value={filterAnswer} onValueChange={setFilterAnswer} disabled={filterQuestion === "todas"}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as respostas</SelectItem>
+                    {answerOptions.map(v => <SelectItem key={v} value={v}>{v.slice(0, 45)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-gray-400 mt-1">Ex.: só entrevistas em que "Sexo" = "Feminino".</p>
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <Button onClick={() => setPreview(true)} variant="outline" className="w-full">
               <BarChart2 className="w-4 h-4 mr-2" /> Pré-visualizar
@@ -423,6 +558,9 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
           </Button>
           <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => generateReport("docx")} disabled={generating || effective.length === 0}>
             {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileType className="w-4 h-4 mr-2" />} Gerar DOCX
+          </Button>
+          <Button className="bg-green-600 hover:bg-green-700" onClick={exportXLSX} disabled={effective.length === 0}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" /> Exportar Excel (dados brutos)
           </Button>
           <Button variant="outline" onClick={exportKML} disabled={effective.filter(i => i.latitude).length === 0}>
             <Map className="w-4 h-4 mr-2" /> Exportar KML
