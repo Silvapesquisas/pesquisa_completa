@@ -25,6 +25,25 @@ function wrapError(error) {
   return e;
 }
 
+// Colunas de data/hora por tabela. Um <input type="date"> vazio devolve "",
+// que o Postgres rejeita ("invalid input syntax for type date"). Converter
+// para null aqui cobre TODOS os caminhos de gravação (formulário, duplicação,
+// restauração de versão).
+const DATE_COLUMNS = {
+  surveys: ["start_date", "end_date"],
+  interviews: ["completed_at"],
+};
+
+function normalizeDates(table, data) {
+  const cols = DATE_COLUMNS[table];
+  if (!cols || !data || typeof data !== "object") return data;
+  const out = { ...data };
+  for (const c of cols) {
+    if (c in out && (out[c] === "" || out[c] === undefined)) out[c] = null;
+  }
+  return out;
+}
+
 function entity(name) {
   const table = TABLES[name];
   return {
@@ -45,12 +64,12 @@ function entity(name) {
       return this.filter({}, sort, limit);
     },
     async create(data) {
-      const { data: row, error } = await supabase.from(table).insert(data).select().single();
+      const { data: row, error } = await supabase.from(table).insert(normalizeDates(table, data)).select().single();
       if (error) throw wrapError(error);
       return row;
     },
     async update(id, data) {
-      const { data: row, error } = await supabase.from(table).update(data).eq("id", id).select().single();
+      const { data: row, error } = await supabase.from(table).update(normalizeDates(table, data)).eq("id", id).select().single();
       if (error) throw wrapError(error);
       return row;
     },

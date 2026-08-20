@@ -321,6 +321,10 @@ export default function SurveyBuilder() {
         max_interviews_per_interviewer: survey.max_interviews_per_interviewer !== "" && survey.max_interviews_per_interviewer != null
           ? Number(survey.max_interviews_per_interviewer)
           : undefined,
+        // Campos de data vazios precisam ir como null: uma string "" quebra a
+        // coluna `date` no banco ("invalid input syntax for type date").
+        start_date: survey.start_date || null,
+        end_date: survey.end_date || null,
       };
       let savedId = editId;
       if (editId) {
