@@ -4,7 +4,10 @@
 //
 // Entrada:  { code, interview, audio_base64? (data URL) }
 // Saída:    { id, audio_url? }
-import { corsHeaders, json, serviceClient, sleep, monthStartISO } from "../_shared/utils.ts";
+import {
+  corsHeaders, json, serviceClient, sleep, monthStartISO,
+  clientIp, rateLimit, tooMany,
+} from "../_shared/utils.ts";
 
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 
@@ -12,12 +15,22 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const svc = serviceClient();
+    const ip = clientIp(req);
+
+    // Teto de envios por IP: 60 a cada 10 min (bem acima do ritmo real de
+    // campo); ao estourar, bloqueia por 30 min.
+    const ipRl = await rateLimit(svc, `fieldSubmit:ip:${ip}`, 60, 600, 1800);
+    if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
+
     const { code, interview = {}, audio_base64 } = await req.json().catch(() => ({}));
     if (!/^\d{8}$/.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
 
     const { data: users } = await svc
       .from("field_users").select("*").eq("access_code", code).eq("active", true).limit(1);
     if (!users || users.length === 0) {
+      // Código errado aqui também é sinal de varredura: 8 falhas / 15 min.
+      const failRl = await rateLimit(svc, `fieldSubmit:fail:${ip}`, 8, 900, 900);
+      if (!failRl.allowed) return tooMany(failRl.retryAfter, "Muitas tentativas com código inválido. Aguarde alguns minutos.");
       await sleep(400);
       return json({ error: "Código inválido ou entrevistador inativo." }, 401);
     }

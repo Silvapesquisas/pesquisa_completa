@@ -5,7 +5,7 @@
 //
 // Entrada: { user_id, password }
 // Saída:   { ok: true }
-import { corsHeaders, json, serviceClient, callerClient } from "../_shared/utils.ts";
+import { corsHeaders, json, serviceClient, callerClient, rateLimit, tooMany } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -13,6 +13,10 @@ Deno.serve(async (req) => {
     const svc = serviceClient();
     const { data: { user: authUser } } = await callerClient(req).auth.getUser();
     if (!authUser) return json({ error: "Não autenticado." }, 401);
+
+    // Teto por administrador: 20 redefinições por hora (uso normal é pontual).
+    const rl = await rateLimit(svc, `setUserPassword:${authUser.id}`, 20, 3600, 3600);
+    if (!rl.allowed) return tooMany(rl.retryAfter, "Muitas redefinições de senha em sequência. Tente novamente mais tarde.");
 
     const { data: me } = await svc.from("users").select("*").eq("id", authUser.id).single();
     const isSuper = me?.is_super_admin === true;
