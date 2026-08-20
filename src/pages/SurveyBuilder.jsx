@@ -8,12 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight, Copy } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight, Copy, ClipboardPaste, Shuffle } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
 import QuestionBank from "@/components/surveys/QuestionBank";
+import QuestionImporter from "@/components/surveys/QuestionImporter";
 
 const QUESTION_TYPES = [
   { value: "aberta", label: "Resposta Aberta" },
@@ -36,13 +37,33 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
   const [expanded, setExpanded] = useState(true);
   const hasOptions = ["multipla_escolha", "unica_escolha"].includes(question.type);
 
-  const addOption = () => onChange({ ...question, options: [...(question.options || []), ""] });
+  const hasValues = Array.isArray(question.option_values);
+
+  const addOption = () => onChange({
+    ...question,
+    options: [...(question.options || []), ""],
+    ...(hasValues ? { option_values: [...question.option_values, ""] } : {}),
+  });
   const updateOption = (i, val) => {
     const opts = [...(question.options || [])];
     opts[i] = val;
     onChange({ ...question, options: opts });
   };
-  const removeOption = (i) => onChange({ ...question, options: question.options.filter((_, idx) => idx !== i) });
+  const updateOptionValue = (i, val) => {
+    const vals = [...(question.option_values || [])];
+    vals[i] = val;
+    onChange({ ...question, option_values: vals });
+  };
+  const removeOption = (i) => onChange({
+    ...question,
+    options: question.options.filter((_, idx) => idx !== i),
+    ...(hasValues ? { option_values: question.option_values.filter((_, idx) => idx !== i) } : {}),
+  });
+  // Liga/desliga a coluna de valores (usada para pontuação/análise numérica)
+  const toggleValues = (on) => onChange({
+    ...question,
+    option_values: on ? (question.options || []).map((_, i) => question.option_values?.[i] ?? "") : undefined,
+  });
 
   return (
     <Card className="border border-gray-200 shadow-sm">
@@ -65,9 +86,15 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
 
       {expanded && (
         <CardContent className="p-4 pt-2 space-y-4">
-          <div>
-            <Label className="text-xs text-gray-500 mb-1 block">Texto da questão</Label>
-            <Input value={question.text || ""} onChange={e => onChange({ ...question, text: e.target.value })} placeholder="Digite a questão..." />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label className="text-xs text-gray-500 mb-1 block">Texto da questão</Label>
+              <Input value={question.text || ""} onChange={e => onChange({ ...question, text: e.target.value })} placeholder="Digite a questão..." />
+            </div>
+            <div className="w-28 shrink-0">
+              <Label className="text-xs text-gray-500 mb-1 block" title="Identificador da questão (ex.: P1). Aparece nas exportações.">Etiqueta</Label>
+              <Input value={question.label || ""} onChange={e => onChange({ ...question, label: e.target.value })} placeholder="P1" className="text-sm" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -90,11 +117,26 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
 
           {hasOptions && (
             <div>
-              <Label className="text-xs text-gray-500 mb-2 block">Opções de resposta</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs text-gray-500">Opções de resposta</Label>
+                <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                  <Switch checked={hasValues} onCheckedChange={toggleValues} />
+                  Atribuir valores
+                </label>
+              </div>
               <div className="space-y-2">
                 {(question.options || []).map((opt, i) => (
                   <div key={i} className="flex gap-2">
                     <Input value={opt} onChange={e => updateOption(i, e.target.value)} placeholder={`Opção ${i + 1}`} className="text-sm" />
+                    {hasValues && (
+                      <Input
+                        value={question.option_values?.[i] ?? ""}
+                        onChange={e => updateOptionValue(i, e.target.value)}
+                        placeholder="valor"
+                        className="text-sm w-20 shrink-0"
+                        title="Valor/peso deste item (usado nas exportações e análises)"
+                      />
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => removeOption(i)}><Trash2 className="w-3 h-3 text-red-400" /></Button>
                   </div>
                 ))}
@@ -111,6 +153,18 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
               <div>
                 <Label className="text-xs text-gray-600 font-medium">Permitir opção "Outra" (campo de texto)</Label>
                 <p className="text-[11px] text-gray-400 mt-0.5">Adiciona uma opção "Outra" automaticamente; ao escolhê-la, o entrevistador digita a resposta. Não precisa adicioná-la na lista acima.</p>
+              </div>
+            </div>
+          )}
+
+          {hasOptions && (
+            <div className="flex items-start gap-2 bg-gray-50 rounded-lg p-3">
+              <Switch checked={question.randomize_options || false} onCheckedChange={val => onChange({ ...question, randomize_options: val })} className="mt-0.5" />
+              <div>
+                <Label className="text-xs text-gray-600 font-medium flex items-center gap-1">
+                  <Shuffle className="w-3 h-3" /> Randomizar ordem das alternativas
+                </Label>
+                <p className="text-[11px] text-gray-400 mt-0.5">A cada entrevista as alternativas aparecem em ordem sorteada, reduzindo o viés de ordem. A opção "Outra" e itens como "Não sei" permanecem no fim.</p>
               </div>
             </div>
           )}
@@ -203,6 +257,7 @@ export default function SurveyBuilder() {
   const [survey, setSurvey] = useState(EMPTY_SURVEY);
   const [saving, setSaving] = useState(false);
   const [showBank, setShowBank] = useState(false);
+  const [showImporter, setShowImporter] = useState(false);
 
   const draftKey = `sb_draft_${editId || "new"}`;
   const readyRef = useRef(false);   // libera o autosave só após o carregamento inicial
@@ -265,6 +320,17 @@ export default function SurveyBuilder() {
   const addQuestion = () => {
     const q = { id: uuidv4(), order: survey.questions.length, type: "aberta", text: "", required: false, options: [] };
     setSurvey(s => ({ ...s, questions: [...s.questions, q] }));
+  };
+
+  // Insere as questões importadas na posição escolhida e reordena tudo.
+  const importQuestions = (incoming, { at } = {}) => {
+    setSurvey(s => {
+      const list = [...s.questions];
+      const pos = at == null ? list.length : Math.min(Math.max(Number(at), 0), list.length);
+      list.splice(pos, 0, ...incoming);
+      return { ...s, questions: list.map((q, i) => ({ ...q, order: i })) };
+    });
+    setShowImporter(false);
   };
 
   const updateQuestion = (id, updated) => {
@@ -444,9 +510,18 @@ export default function SurveyBuilder() {
             onClose={() => setShowBank(false)}
           />
         )}
+        <QuestionImporter
+          open={showImporter}
+          onClose={() => setShowImporter(false)}
+          onImport={importQuestions}
+          existingCount={survey.questions.length}
+        />
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-800">Questões <Badge variant="secondary">{survey.questions.length}</Badge></h2>
           <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowImporter(true)} className="border-green-200 text-green-700 hover:bg-green-50">
+              <ClipboardPaste className="w-4 h-4 mr-1" /> Importar
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setShowBank(true)} className="border-blue-200 text-blue-600 hover:bg-blue-50">
               <BookMarked className="w-4 h-4 mr-1" /> Banco de Questões
             </Button>
