@@ -20,24 +20,30 @@ const TYPE_LABEL = {
   escala: "Escala", sim_nao: "Sim/Não",
 };
 
-const EXAMPLE = `P1. Qual seu grau de satisfação com o serviço? *
+// Formato de questionário impresso/Word — o mais comum nas empresas.
+const EXAMPLE_MARCADORES = `1) O/a Sr/a. Vota em Aquidabã? 1( ) Sim ( ) Não
+1.2) Em qual bairro o/a Sr/a mora? ______
+Sexo:  1( ) Masculino   2( ) Feminino
+Escolaridade: 1( ) ANALFABETO  2( ) FUNDAMENTAL  3( ) MÉDIO
+4( ) SUPERIOR
+01) Qual o seu interesse nas eleições que
+ocorrerão em outubro desse ano?
+1( ) Muito interesse   2( ) Pouco interesse
+3( ) Nenhum interesse  4( ) NS/NR`;
+
+// Formato simples — uma alternativa por linha.
+const EXAMPLE_LINHAS = `P1. Qual seu grau de satisfação com o serviço? *
 Ótimo = 5
 Bom = 4
 Regular = 3
-Ruim = 2
-Péssimo = 1
 
 [multi] Quais meios de transporte você utiliza?
 Ônibus
 Carro
-Bicicleta
-A pé
 
 Você aprova a atual gestão?
 Sim
-Não
-
-Qual sugestão você daria?`;
+Não`;
 
 export default function QuestionImporter({ open, onClose, onImport, existingCount = 0 }) {
   const [tab, setTab] = useState("texto");
@@ -126,23 +132,24 @@ export default function QuestionImporter({ open, onClose, onImport, existingCoun
             <div className="flex items-center justify-between">
               <Label className="text-xs text-gray-500">Cole ou escreva o questionário</Label>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setText(EXAMPLE)} className="text-xs text-blue-600 hover:underline">Usar exemplo</button>
+                <button type="button" onClick={() => setText(EXAMPLE_MARCADORES)} className="text-xs text-blue-600 hover:underline">Exemplo com ( )</button>
+                <button type="button" onClick={() => setText(EXAMPLE_LINHAS)} className="text-xs text-blue-600 hover:underline">Exemplo por linhas</button>
                 <button type="button" onClick={() => setShowHelp(v => !v)} className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1">
                   <HelpCircle className="w-3 h-3" /> Como formatar
                 </button>
               </div>
             </div>
             {showHelp && (
-              <div className="text-[11px] text-gray-600 bg-blue-50 rounded-lg p-3 space-y-1">
-                <p><strong>Estrutura:</strong> a 1ª linha do bloco é o enunciado; as linhas seguintes são as alternativas. Separe as questões com uma linha em branco.</p>
-                <p><strong>Opcionais:</strong> <code>*</code> no fim do enunciado = obrigatória · <code>[multi]</code> no início = múltipla escolha · <code>P1.</code> ou <code>[etiqueta]</code> = identificador · <code>Ótimo = 5</code> = valor do item.</p>
-                <p><strong>Automático:</strong> sem alternativas vira <em>Aberta</em>; “Sim/Não” vira <em>Sim/Não</em>; 1 a 5 vira <em>Escala</em>.</p>
+              <div className="text-[11px] text-gray-600 bg-blue-50 rounded-lg p-3 space-y-1.5">
+                <p><strong>Formato de questionário (com “( )”)</strong> — o mesmo do seu Word impresso. As alternativas ficam na <em>mesma linha</em> do enunciado, marcadas por <code>1( )</code>, <code>2( )</code> ou só <code>( )</code>, e podem continuar nas linhas seguintes. A numeração <code>1)</code>, <code>01)</code>, <code>1.2)</code> vira a etiqueta, e o número do marcador vira o valor do item.</p>
+                <p><strong>Formato por linhas</strong> — a 1ª linha do bloco é o enunciado e as seguintes são as alternativas, com as questões separadas por linha em branco. Opcionais: <code>*</code> = obrigatória · <code>[multi]</code> = múltipla escolha · <code>Ótimo = 5</code> = valor.</p>
+                <p><strong>Automático:</strong> sem alternativas vira <em>Aberta</em>; “Sim/Não” vira <em>Sim/Não</em>; 1 a 5 vira <em>Escala</em>. Enunciado quebrado em duas linhas é juntado, e cabeçalhos/rodapés são ignorados.</p>
               </div>
             )}
             <Textarea
               value={text}
               onChange={e => { setText(e.target.value); resetEdits(); }}
-              placeholder={EXAMPLE}
+              placeholder={EXAMPLE_MARCADORES}
               className="font-mono text-xs h-56"
             />
           </TabsContent>
@@ -175,7 +182,32 @@ export default function QuestionImporter({ open, onClose, onImport, existingCoun
         <div className="border rounded-lg p-3 space-y-3">
           <p className="text-xs font-medium text-gray-700">Opções de importação</p>
 
-          {tab === "texto" && (
+          <div>
+            <Label className="text-[11px] text-gray-500 mb-1 block">Formato do texto</Label>
+            <Select value={opts.format} onValueChange={v => { set("format", v); resetEdits(); }}>
+              <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Detectar automaticamente (recomendado)</SelectItem>
+                <SelectItem value="marcadores">Questionário com marcadores “1( ) Sim  2( ) Não”</SelectItem>
+                <SelectItem value="linhas">Uma alternativa por linha</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {opts.format !== "linhas" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                <Switch checked={opts.markerValues} onCheckedChange={v => { set("markerValues", v); resetEdits(); }} />
+                Usar o nº do marcador como <strong>valor</strong>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                <Switch checked={opts.spontaneousOther} onCheckedChange={v => { set("spontaneousOther", v); resetEdits(); }} />
+                Questão só com NS/NR vira <strong>espontânea</strong>
+              </label>
+            </div>
+          )}
+
+          {tab === "texto" && opts.format === "linhas" && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-[11px] text-gray-500 mb-1 block">Separador de questões</Label>
@@ -219,10 +251,12 @@ export default function QuestionImporter({ open, onClose, onImport, existingCoun
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <Switch checked={opts.parseValues} onCheckedChange={v => { set("parseValues", v); resetEdits(); }} />
-              Importar <strong>valor</strong> dos itens
-            </label>
+            {opts.format === "linhas" && (
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                <Switch checked={opts.parseValues} onCheckedChange={v => { set("parseValues", v); resetEdits(); }} />
+                Importar <strong>valor</strong> dos itens
+              </label>
+            )}
             <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
               <Switch checked={opts.parseLabels} onCheckedChange={v => { set("parseLabels", v); resetEdits(); }} />
               Importar <strong>etiqueta</strong> (identificador)

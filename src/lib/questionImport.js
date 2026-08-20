@@ -23,16 +23,19 @@ import * as XLSX from "xlsx";
 const uuidv4 = () => crypto.randomUUID();
 
 export const DEFAULTS = {
+  format: "auto",               // auto | marcadores | linhas
   questionDelimiter: "blank",   // blank | --- | custom
   customQuestionDelimiter: "",
   optionDelimiter: "newline",   // newline | ; | | | , | custom
   customOptionDelimiter: "",
   valueSeparator: "=",          // separa rótulo do valor: "Ótimo = 5"
-  parseValues: false,           // ler "valor" dos itens
-  parseLabels: false,           // ler "etiqueta" (identificador) da questão
+  parseValues: false,           // ler "valor" dos itens (formato por linhas)
+  parseLabels: true,            // ler "etiqueta" (identificador) da questão
   randomizeOptions: false,      // sortear a ordem das alternativas na coleta
   allRequired: false,           // marcar todas como obrigatórias
   defaultType: "unica_escolha", // tipo quando houver alternativas
+  markerValues: true,           // usar o nº do marcador "1( )" como valor do item
+  spontaneousOther: true,       // questão só com NS/NR vira espontânea (permite "Outra")
 };
 
 const SIM_NAO = ["sim", "não", "nao"];
@@ -98,10 +101,160 @@ function parseOption(raw, opts) {
 }
 
 // ---------------------------------------------------------------------------
+// FORMATO "QUESTIONÁRIO" — o usado em questionários impressos/Word reais:
+// as alternativas vêm na MESMA linha do enunciado, marcadas por "1( )", "( )",
+// "2 ( )" ou "[ ]", podendo continuar nas linhas seguintes.
+//
+//   1) O/a Sr/a. Vota em Aquidabã? 1( ) Sim ( ) Não
+//   Sexo:   1( ) Masculino   2( ) Feminino
+//   Escolaridade: 1( ) ANALFABETO(A) 2( ) FUNDAMENTAL INCOMPLETO
+//   4( ) MÉDIO INCOMPLETO   5( ) MÉDIO COMPLETO
+//
+// Cuidado: "(a)", "(1º Cenário)" e "(PL)" NÃO são marcadores — só contam
+// parênteses/colchetes vazios.
+const MARKER = /(\d{1,3})?\s*[([]\s*[)\]]/g;
+const STARTS_WITH_MARKER = /^\s*(?:\d{1,3})?\s*[([]\s*[)\]]/;
+// Numeração do enunciado: "1)", "01)", "1.2)", "1 -", "Q3."
+const QUESTION_NUMBER = /^\s*([A-Za-z]?\d{1,3}(?:\.\d{1,2})?)\s*[).\-–]\s*/;
+// Alternativas de fuga (não são resposta de conteúdo)
+const ESCAPE_OPTION = /^(ns\/nr|ns|nr|n[ãa]o sei|n[ãa]o respondeu|n[ãa]o soube|branco ou nulo|branco|nulo|nenhum[ao]?|prefiro n[ãa]o responder)$/i;
+
+const cleanText = (s) => String(s || "")
+  .replace(/[_\t]+/g, " ")          // linhas para preencher e tabulações
+  .replace(/\s{2,}/g, " ")
+  .trim()
+  .replace(/[\s:.\-–]+$/, "")       // pontuação solta no fim
+  .trim();
+
+// Separa "enunciado + alternativas" de uma linha usando os marcadores.
+function splitLineByMarkers(line) {
+  MARKER.lastIndex = 0;
+  const hits = [];
+  let m;
+  while ((m = MARKER.exec(line)) !== null) {
+    hits.push({ start: m.index, end: m.index + m[0].length, num: m[1] || null });
+  }
+  if (hits.length === 0) return { head: line, options: [] };
+
+  const head = line.slice(0, hits[0].start);
+  const options = hits.map((h, i) => ({
+    label: line.slice(h.end, i + 1 < hits.length ? hits[i + 1].start : line.length),
+    num: h.num,
+  }));
+  return { head, options };
+}
+
+function parseQuestionnaireText(text, opts) {
+  const lines = String(text).split(/\r?\n/);
+  const out = [];
+  let cur = null;
+
+  const flush = () => {
+    if (!cur) return;
+    const label = cur.label;
+    let head = cur.textParts.join(" ");
+
+    // "Idade 11( ) 16 A 24 ANOS": o marcador engole o dígito final do
+    // enunciado. Se o nº do 1º marcador começa com o dígito que sobrou no
+    // texto e é mais longo, o excedente pertence ao texto — devolve-o.
+    const trailing = head.match(/(\d{1,2})\s*$/);
+    const first = cur.options[0];
+    if (trailing && first?.num && first.num.startsWith(trailing[1]) && first.num.length > trailing[1].length) {
+      head = head.slice(0, trailing.index);
+      first.num = first.num.slice(trailing[1].length);
+    }
+
+    const qText = cleanText(head);
+    if (qText) {
+      const opts_ = cur.options
+        .map(o => ({ label: cleanText(o.label), value: o.num }))
+        .filter(o => o.label);
+
+      // "Idade 11( )": o marcador absorveu o dígito final do enunciado e virou
+      // "11". Se do 2º item em diante a numeração é 2,3,…,N, o 1º só pode ser 1.
+      if (opts_.length >= 3 && opts_[0].value !== "1") {
+        const sequential = opts_.slice(1).every((o, i) => o.value === String(i + 2));
+        if (sequential) opts_[0].value = "1";
+      }
+
+      out.push({ text: qText, label, options: opts_ });
+    }
+    cur = null;
+  };
+
+  const startQuestion = (line) => {
+    flush();
+    let rest = line;
+    let label = "";
+    const num = rest.match(QUESTION_NUMBER);
+    if (num) { label = num[1]; rest = rest.slice(num[0].length); }
+    const { head, options } = splitLineByMarkers(rest);
+    cur = { label, textParts: [head], options: [...options] };
+  };
+
+  for (const raw of lines) {
+    const line = raw.replace(/ /g, " ");
+    if (!line.trim()) continue;
+
+    // 1) linha que começa com marcador -> alternativas da questão atual
+    if (STARTS_WITH_MARKER.test(line)) {
+      if (!cur) continue;                       // marcador solto sem questão
+      cur.options.push(...splitLineByMarkers(line).options);
+      continue;
+    }
+    // 2) linha numerada -> nova questão
+    if (QUESTION_NUMBER.test(line)) { startQuestion(line); continue; }
+    // 3) linha com marcador no meio (ex.: "Sexo: 1( ) ...") -> nova questão
+    if (MARKER.test(line)) { MARKER.lastIndex = 0; startQuestion(line); continue; }
+    MARKER.lastIndex = 0;
+    // 4) continuação do enunciado quebrado em várias linhas
+    if (cur && cur.options.length === 0 && !/[?:.]\s*$/.test(cur.textParts.join(" ").trim())) {
+      cur.textParts.push(line);
+      continue;
+    }
+    // 5) linha "solta" que parece enunciado (termina com ? ou :)
+    if (/[?:]\s*$/.test(line.trim())) { startQuestion(line); continue; }
+    // 6) resto (cabeçalho, "Entrevistador", rodapé) é ignorado
+  }
+  flush();
+
+  return out.map(q => {
+    const isEscape = (o) => ESCAPE_OPTION.test(o.label.trim());
+    // Espontânea: só tem alternativas de fuga (NS/NR, Branco ou Nulo) — o
+    // entrevistador precisa poder registrar a resposta livre.
+    const onlyEscapes = q.options.length > 0 && q.options.every(isEscape);
+    const type = detectType(q.options, false, opts.defaultType);
+    const hasOptions = ["multipla_escolha", "unica_escolha"].includes(type);
+
+    const built = buildQuestion({
+      text: q.text,
+      label: opts.parseLabels ? q.label : "",
+      required: opts.allRequired,
+      type,
+      options: hasOptions ? q.options.map(o => ({
+        label: o.label,
+        value: opts.markerValues ? o.value : null,
+      })) : [],
+      randomize: opts.randomizeOptions && hasOptions && !onlyEscapes,
+      parseValues: opts.markerValues,
+    });
+    if (onlyEscapes && opts.spontaneousOther && hasOptions) built.allow_other = true;
+    return built;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Texto -> questões
 export function parseQuestionsFromText(text, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   if (!text || !text.trim()) return [];
+
+  // Detecção de formato: se há marcadores "( )" pelo texto, é questionário.
+  MARKER.lastIndex = 0;
+  const looksLikeQuestionnaire = (String(text).match(/[([]\s*[)\]]/g) || []).length >= 2;
+  const useMarkers = opts.format === "marcadores"
+    || (opts.format === "auto" && looksLikeQuestionnaire);
+  if (useMarkers) return parseQuestionnaireText(text, opts);
 
   const blocks = splitBy(text, opts.questionDelimiter, opts.customQuestionDelimiter)
     .map(b => b.trim())
