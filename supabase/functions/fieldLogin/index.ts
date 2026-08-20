@@ -4,23 +4,40 @@
 //
 // Entrada:  { code: string, withInterviews?: boolean }
 // Saída:    { fieldUser, surveys, counts, myInterviews? }
-import { corsHeaders, json, serviceClient, sleep } from "../_shared/utils.ts";
+import {
+  corsHeaders, json, serviceClient, sleep,
+  clientIp, rateLimit, rateLimitReset, tooMany,
+} from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const svc = serviceClient();
+    const ip = clientIp(req);
+
+    // Teto geral por IP (protege contra varredura automatizada de códigos):
+    // 40 tentativas a cada 10 min; ao estourar, bloqueia por 30 min.
+    const ipRl = await rateLimit(svc, `fieldLogin:ip:${ip}`, 40, 600, 1800);
+    if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
+
     const { code, withInterviews } = await req.json().catch(() => ({}));
     if (!/^\d{8}$/.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
+
+    // Limite de ERROS por IP: 8 códigos errados em 15 min -> bloqueia 15 min.
+    // Só conta falhas, então o entrevistador legítimo nunca é afetado.
+    const failKey = `fieldLogin:fail:${ip}`;
 
     const { data: users } = await svc
       .from("field_users").select("*")
       .eq("access_code", code).eq("active", true).limit(1);
     if (!users || users.length === 0) {
+      const failRl = await rateLimit(svc, failKey, 8, 900, 900);
+      if (!failRl.allowed) return tooMany(failRl.retryAfter, "Muitas tentativas com código inválido. Aguarde alguns minutos.");
       await sleep(400); // atraso uniforme contra enumeração de códigos
       return json({ error: "Código inválido ou entrevistador inativo." }, 401);
     }
     const fieldUser = users[0];
+    await rateLimitReset(svc, failKey); // login correto zera as falhas do IP
 
     // Pesquisas ativas SOMENTE da empresa do entrevistador
     const { data: activeSurveys } = await svc

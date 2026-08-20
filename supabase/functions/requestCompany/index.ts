@@ -4,18 +4,32 @@
 //
 // Entrada: { name, owner_email, password, full_name?, phone?, cnpj? }
 // Saída:   { ok: true }
-import { corsHeaders, json, serviceClient } from "../_shared/utils.ts";
+import { corsHeaders, json, serviceClient, clientIp, rateLimit, tooMany } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const svc = serviceClient();
+
+    // Anti-spam de cadastro: no máximo 3 cadastros por IP a cada 1h; ao
+    // estourar, bloqueia esse IP por 6h.
+    const ipRl = await rateLimit(svc, `requestCompany:ip:${clientIp(req)}`, 3, 3600, 21600);
+    if (!ipRl.allowed) {
+      return tooMany(ipRl.retryAfter, "Muitas solicitações de cadastro deste dispositivo. Tente novamente mais tarde ou fale conosco pelo WhatsApp.");
+    }
+
     const { name, owner_email, password, full_name, phone, cnpj } = await req.json().catch(() => ({}));
 
     const email = String(owner_email || "").trim().toLowerCase();
     if (!name || String(name).trim().length < 2) return json({ error: "Informe o nome da empresa." }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Informe um e-mail válido." }, 400);
     if (!password || String(password).length < 6) return json({ error: "A senha deve ter ao menos 6 caracteres." }, 400);
+
+    // Limite por e-mail: no máximo 3 tentativas por dia para o mesmo endereço.
+    const emailRl = await rateLimit(svc, `requestCompany:email:${email}`, 3, 86400, 86400);
+    if (!emailRl.allowed) {
+      return tooMany(emailRl.retryAfter, "Muitas tentativas de cadastro com este e-mail. Fale conosco pelo WhatsApp.");
+    }
 
     // Cria o usuário no Auth (senha definida na hora; e-mail já confirmado).
     const { data: created, error: cErr } = await svc.auth.admin.createUser({
