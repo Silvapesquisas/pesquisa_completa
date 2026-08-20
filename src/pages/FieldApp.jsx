@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 import QuestionIndex from "@/components/fieldapp/QuestionIndex";
 import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
+import { displayOptions } from "@/lib/optionOrder";
 
 const FIELD_USER_KEY = "fieldapp_user";
 
@@ -23,8 +24,18 @@ const OTHER_LABEL = "Outra";
 // para não duplicar com a opção especial gerada pelo allow_other.
 const isOtherOption = (opt) => /^outr[oa]s?$/i.test((opt || "").trim());
 
-function QuestionField({ question, value, onChange }) {
+function QuestionField({ question, value, onChange, orderSeed }) {
   const type = question.type;
+  // Ordem das alternativas: sorteada quando a questão pede randomização.
+  // useMemo antes de qualquer retorno condicional (regra dos hooks) e semeada
+  // por entrevista+questão, para não remexer a lista a cada toque.
+  const ordered = useMemo(
+    () => displayOptions(question.options, {
+      randomize: question.randomize_options,
+      seed: `${orderSeed || ""}:${question.id}`,
+    }),
+    [question.options, question.randomize_options, question.id, orderSeed],
+  );
   if (type === "aberta") {
     return <Textarea value={value || ""} onChange={e => onChange(e.target.value)} placeholder="Sua resposta..." rows={3} className="text-base" />;
   }
@@ -54,7 +65,7 @@ function QuestionField({ question, value, onChange }) {
   }
   if (type === "unica_escolha") {
     const allowOther = !!question.allow_other;
-    const presets = (question.options || []).filter(o => !allowOther || !isOtherOption(o));
+    const presets = ordered.filter(o => !allowOther || !isOtherOption(o));
     const otherPrefix = `${OTHER_LABEL}: `;
     const isOther = allowOther && (value === OTHER_LABEL || (value || "").startsWith(otherPrefix));
     const otherText = (value || "").startsWith(otherPrefix) ? value.slice(otherPrefix.length) : "";
@@ -83,7 +94,7 @@ function QuestionField({ question, value, onChange }) {
   if (type === "multipla_escolha") {
     const allowOther = !!question.allow_other;
     const selected = value ? value.split("|") : [];
-    const presets = (question.options || []).filter(o => !allowOther || !isOtherOption(o));
+    const presets = ordered.filter(o => !allowOther || !isOtherOption(o));
     const otherPrefix = `${OTHER_LABEL}: `;
     const otherEntry = selected.find(s => s === OTHER_LABEL || s.startsWith(otherPrefix));
     const isOther = allowOther && otherEntry !== undefined;
@@ -819,6 +830,7 @@ export default function FieldApp() {
             question={currentQuestion}
             value={answers[currentQuestion.id]}
             onChange={val => setAnswers(a => ({ ...a, [currentQuestion.id]: val }))}
+            orderSeed={clientUuidRef.current}
           />
         </div>
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex gap-2">
