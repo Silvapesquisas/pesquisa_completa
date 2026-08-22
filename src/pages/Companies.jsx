@@ -26,6 +26,7 @@ const PLANS = [
 export default function Companies() {
   const [companies, setCompanies] = useState([]);
   const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState({}); // { company_id: { used, total } }
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -41,12 +42,14 @@ export default function Companies() {
   const load = async () => {
     const me = await base44.auth.me();
     setCurrentUser(me);
-    const [cos, us] = await Promise.all([
+    const [cos, us, st] = await Promise.all([
       base44.entities.Company.list("-created_date"),
       base44.entities.User.list(),
+      base44.stats.companyInterviews().catch(() => ({})),
     ]);
     setCompanies(cos);
     setUsers(us);
+    setStats(st);
     setLoading(false);
   };
 
@@ -261,6 +264,41 @@ export default function Companies() {
                     {co.max_interviews_per_month ? `${co.max_interviews_per_month} entrevistas/mês` : "Entrevistas/mês: ilimitado"}
                   </span>
                 </div>
+                {/* Consumo de entrevistas do mês (crédito do plano) */}
+                {(() => {
+                  const s = stats[co.id] || { used: 0, total: 0 };
+                  const limit = Number(co.max_interviews_per_month) || 0;
+                  if (!limit) {
+                    return (
+                      <p className="text-xs text-gray-500 mb-2">
+                        <strong>{s.used}</strong> entrevista(s) neste mês · {s.total} no total · limite ilimitado
+                      </p>
+                    );
+                  }
+                  const pct = Math.min((s.used / limit) * 100, 100);
+                  const restam = Math.max(limit - s.used, 0);
+                  const cor = pct >= 95 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-green-500";
+                  const txt = pct >= 95 ? "text-red-600" : pct >= 80 ? "text-amber-600" : "text-gray-500";
+                  return (
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className={txt}>
+                          <strong>{s.used}</strong> / {limit} entrevistas no mês
+                        </span>
+                        <span className={txt}>{restam} restantes</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${cor} transition-all`} style={{ width: `${pct}%` }} />
+                      </div>
+                      {pct >= 80 && (
+                        <p className={`text-[10px] mt-1 ${txt}`}>
+                          {pct >= 100 ? "Cota esgotada — o campo está bloqueado." : "Cota acabando — avise sobre a renovação."}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-0.5">{s.total} entrevistas no total (histórico)</p>
+                    </div>
+                  );
+                })()}
                 {co.phone && <p className="text-xs text-gray-400">Tel: {co.phone}</p>}
                 {co.cnpj && <p className="text-xs text-gray-400">CNPJ: {co.cnpj}</p>}
 

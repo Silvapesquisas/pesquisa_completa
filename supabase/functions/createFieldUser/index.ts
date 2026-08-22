@@ -3,11 +3,13 @@
 //
 // Entrada:  { name, role?, region?, phone?, notes?, company_id? (só super-admin) }
 // Saída:    { fieldUser }
-import { corsHeaders, json, serviceClient, callerClient } from "../_shared/utils.ts";
+import { corsHeaders, json, serviceClient, callerClient, generateAccessCode } from "../_shared/utils.ts";
 
 const MIN_LIMIT = 4;
 const MAX_LIMIT = 25;
-const genCode = () => Math.floor(10000000 + Math.random() * 90000000).toString();
+// 12 dígitos com aleatoriedade criptográfica (os códigos de 8 já emitidos
+// seguem válidos — ver ACCESS_CODE_RE).
+const genCode = () => generateAccessCode();
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
