@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { maskPhoneBR } from "@/lib/masks";
+import { monthStartISO } from "@/lib/period";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -74,7 +75,7 @@ export default function Interviewers() {
 
   // Uso de entrevistas no mês corrente (cota mensal definida pelo super-admin)
   const monthlyLimit = Number(company?.max_interviews_per_month) || 0;
-  const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); })();
+  const monthStart = monthStartISO(); // corte no horário de Brasília, igual ao servidor
   const monthlyUsed = interviews.filter(i => i.status === "concluida" && (i.completed_at || i.created_date || "") >= monthStart).length;
 
   const filtered = fieldUsers.filter(u => {

@@ -86,10 +86,15 @@ export function tooMany(retryAfter: number, msg?: string) {
   );
 }
 
-// Início do mês corrente em ISO (UTC).
+// Início do mês corrente no horário de BRASÍLIA (não em UTC): a cota mensal
+// segue o calendário do cliente. Sem isso, uma entrevista feita no último dia
+// do mês após as 21h já contaria no mês seguinte.
+// O Brasil não usa horário de verão desde 2019, então o offset é fixo (-03:00).
 export function monthStartISO() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const [y, m] = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()).split("-");
+  return new Date(`${y}-${m}-01T00:00:00-03:00`).toISOString();
 }
 
 // Código de acesso do App de Campo. Novos códigos têm 12 dígitos; os de 8
