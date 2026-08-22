@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { maskPhoneBR } from "@/lib/masks";
-import { monthStartISO } from "@/lib/period";
+import { monthStartISO, deviceLockActive, deviceLockStartLabel } from "@/lib/period";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -303,9 +303,13 @@ export default function Interviewers() {
                             Desvincular
                           </button>
                         </>
-                      ) : (
+                      ) : deviceLockActive() ? (
                         <span className="flex items-center gap-1 text-gray-400">
                           <Smartphone className="w-3 h-3" /> Nenhum aparelho vinculado — o próximo celular que entrar será vinculado
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-600">
+                          <Smartphone className="w-3 h-3" /> Trava por aparelho começa em {deviceLockStartLabel()} — até lá, o código funciona em qualquer celular
                         </span>
                       )}
                     </div>

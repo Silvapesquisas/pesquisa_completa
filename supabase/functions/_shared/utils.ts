@@ -114,11 +114,26 @@ export function generateAccessCode(digits = ACCESS_CODE_DIGITS) {
 }
 
 // ── Vínculo de dispositivo ────────────────────────────────────────────────
-// Um código só funciona em um aparelho por vez. Devolve:
+// Um código só funciona em um aparelho por vez.
+//
+// PERÍODO DE CARÊNCIA: o bloqueio só passa a valer em DEVICE_LOCK_START.
+// Antes disso, equipes que já usavam o mesmo código em mais de um celular
+// continuam trabalhando normalmente — nada é vinculado nem bloqueado, apenas
+// registramos o último acesso. Não vincular durante a carência evita "eleger"
+// um celular arbitrário antes da data combinada. A partir dela, o primeiro
+// aparelho a entrar assume o vínculo e os demais são recusados.
+export const DEVICE_LOCK_START = new Date("2026-08-25T00:00:00-03:00");
+
+export function deviceLockActive(now = new Date()) {
+  return now >= DEVICE_LOCK_START;
+}
+
+// Devolve:
 //   ok            -> pode seguir
 //   blocked       -> outro aparelho já está vinculado
 //   justBound     -> este aparelho acabou de assumir o vínculo
-export type DeviceCheck = { ok: boolean; blocked?: boolean; justBound?: boolean };
+//   grace         -> ainda na carência (libera sem vincular)
+export type DeviceCheck = { ok: boolean; blocked?: boolean; justBound?: boolean; grace?: boolean };
 
 export async function checkDeviceBinding(
   svc: ReturnType<typeof serviceClient>,
@@ -130,6 +145,11 @@ export async function checkDeviceBinding(
   const now = new Date().toISOString();
 
   if (!deviceId) return { ok: true }; // app antigo, sem device: não trava
+
+  if (!deviceLockActive()) {
+    await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
+    return { ok: true, grace: true };
+  }
 
   if (!bound) {
     await svc.from("field_users").update({
