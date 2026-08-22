@@ -116,7 +116,7 @@ function CodeLoginMini({ onLogin }) {
           <p className="text-sm text-gray-500 mt-1">Digite seu código de acesso para ver seu progresso</p>
         </div>
         <Input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 12))}
-          placeholder="00000000" className="text-center text-2xl tracking-[0.5em] font-mono font-bold h-14"
+          placeholder="000000000000" className="text-center text-xl tracking-[0.2em] font-mono font-bold h-14"
           maxLength={12} inputMode="numeric" onKeyDown={e => e.key === "Enter" && handle()} />
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
         <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700" onClick={handle} disabled={loading || code.length < 8}>
