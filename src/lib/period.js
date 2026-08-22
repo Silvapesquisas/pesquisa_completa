@@ -8,3 +8,13 @@ export function monthStartISO() {
   }).format(new Date()).split("-");
   return new Date(`${y}-${m}-01T00:00:00-03:00`).toISOString();
 }
+
+// Data em que o bloqueio de celular por entrevistador entra em vigor.
+// Precisa ser IGUAL a DEVICE_LOCK_START nas Edge Functions — aqui serve só
+// para o painel avisar o gestor; quem decide de fato é o servidor.
+export const DEVICE_LOCK_START = new Date("2026-08-25T00:00:00-03:00");
+
+export const deviceLockActive = (now = new Date()) => now >= DEVICE_LOCK_START;
+
+export const deviceLockStartLabel = () =>
+  DEVICE_LOCK_START.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
