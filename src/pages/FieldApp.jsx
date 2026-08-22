@@ -144,7 +144,8 @@ function CodeLogin({ onLogin }) {
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    if (code.length !== 8) { setError("O código deve ter 8 dígitos."); return; }
+    // Códigos novos têm 12 dígitos; os antigos, 8 — ambos válidos.
+    if (code.length < 8 || code.length > 12) { setError("O código deve ter entre 8 e 12 dígitos."); return; }
     setLoading(true);
     setError("");
     try {
@@ -158,6 +159,8 @@ function CodeLogin({ onLogin }) {
     } catch (e) {
       if (!navigator.onLine) {
         setError("Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
+      } else if (e?.code === "device_blocked" || e?.status === 409) {
+        setError("Este código já está sendo usado em outro celular. Peça ao gestor para desvincular o aparelho anterior em Entrevistadores.");
       } else if (e?.status === 401 || e?.status === 400) {
         setError("Código inválido ou entrevistador inativo. Verifique com seu supervisor.");
       } else if (e?.status === 404) {
@@ -182,10 +185,10 @@ function CodeLogin({ onLogin }) {
         <div className="space-y-3">
           <Input
             value={code}
-            onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 12))}
             placeholder="00000000"
             className="text-center text-2xl tracking-[0.5em] font-mono font-bold h-14"
-            maxLength={8}
+            maxLength={12}
             inputMode="numeric"
             onKeyDown={e => e.key === "Enter" && handleLogin()}
           />
@@ -193,7 +196,7 @@ function CodeLogin({ onLogin }) {
           <Button
             className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-base"
             onClick={handleLogin}
-            disabled={loading || code.length !== 8}
+            disabled={loading || code.length < 8}
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar"}
           </Button>

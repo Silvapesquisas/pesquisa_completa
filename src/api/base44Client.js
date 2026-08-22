@@ -6,6 +6,7 @@
 // Migração Base44 -> Supabase (Postgres + Auth + Edge Functions + Storage).
 // ============================================================================
 import { supabase } from "@/api/supabaseClient";
+import { deviceInfo } from "@/lib/device";
 
 // Mapeia o nome de entidade do código para a tabela do Postgres
 const TABLES = {
@@ -93,18 +94,28 @@ function entity(name) {
 
 const entities = Object.fromEntries(Object.keys(TABLES).map((n) => [n, entity(n)]));
 
+// Funções do App de Campo: recebem automaticamente a identidade do aparelho,
+// usada para vincular o código a UM celular por vez.
+const FIELD_FUNCTIONS = new Set(["fieldLogin", "fieldSubmitInterview"]);
+
 // Invoca uma Edge Function preservando o contrato de erro (e.status / e.message)
 async function invokeFunction(name, body) {
-  const { data, error } = await supabase.functions.invoke(name, { body: body || {} });
+  const payload = FIELD_FUNCTIONS.has(name)
+    ? { ...deviceInfo(), ...(body || {}) }
+    : (body || {});
+  const { data, error } = await supabase.functions.invoke(name, { body: payload });
   if (error) {
     let status = error?.context?.status;
     let message = error?.message;
+    let code;
     try {
       const j = await error?.context?.json?.();
       if (j?.error) message = j.error;
+      if (j?.code) code = j.code;
     } catch { /* ignore */ }
     const e = new Error(message || "Falha na função.");
     e.status = status;
+    e.code = code; // ex.: "device_blocked"
     throw e;
   }
   return data;
@@ -148,6 +159,20 @@ const integrations = {
   },
 };
 
+const stats = {
+  // Entrevistas por empresa (mês corrente e total). O RLS decide o alcance:
+  // admin vê a própria empresa; super-admin vê todas.
+  async companyInterviews() {
+    const { data, error } = await supabase.rpc("company_interview_stats");
+    if (error) throw wrapError(error);
+    const map = {};
+    for (const r of data || []) {
+      map[r.company_id] = { used: Number(r.used_this_month) || 0, total: Number(r.total) || 0 };
+    }
+    return map;
+  },
+};
+
 const storage = {
   // Gera uma URL assinada (temporária) para um caminho de áudio no bucket
   // privado. Aceita URLs http antigas por compatibilidade. Retorna null se falhar.
@@ -179,4 +204,5 @@ export const base44 = {
   integrations,
   users,
   storage,
+  stats,
 };

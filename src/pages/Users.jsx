@@ -204,7 +204,7 @@ export default function Users() {
           <DialogHeader><DialogTitle>Convidar Gestor / Admin</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="bg-blue-50 text-blue-700 text-xs px-3 py-2 rounded-lg">
-              Para cadastrar <strong>entrevistadores de campo</strong>, acesse a página <strong>Entrevistadores</strong> — eles acessam pelo App de Campo com um código de 8 dígitos, sem necessidade de e-mail.
+              Para cadastrar <strong>entrevistadores de campo</strong>, acesse a página <strong>Entrevistadores</strong> — eles acessam pelo App de Campo com um código de 12 dígitos, sem necessidade de e-mail.
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">E-mail</Label>

@@ -7,6 +7,7 @@
 import {
   corsHeaders, json, serviceClient, sleep,
   clientIp, rateLimit, rateLimitReset, tooMany,
+  ACCESS_CODE_RE, checkDeviceBinding, notifyCompanyManagers,
 } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
@@ -20,8 +21,8 @@ Deno.serve(async (req) => {
     const ipRl = await rateLimit(svc, `fieldLogin:ip:${ip}`, 40, 600, 1800);
     if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
 
-    const { code, withInterviews } = await req.json().catch(() => ({}));
-    if (!/^\d{8}$/.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
+    const { code, withInterviews, device_id, device_label } = await req.json().catch(() => ({}));
+    if (!ACCESS_CODE_RE.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
 
     // Limite de ERROS por IP: 8 códigos errados em 15 min -> bloqueia 15 min.
     // Só conta falhas, então o entrevistador legítimo nunca é afetado.
@@ -38,6 +39,23 @@ Deno.serve(async (req) => {
     }
     const fieldUser = users[0];
     await rateLimitReset(svc, failKey); // login correto zera as falhas do IP
+
+    // Um código só vale em UM aparelho por vez. Se outro celular já está
+    // vinculado, recusa e avisa os gestores da empresa.
+    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
+    if (dev.blocked) {
+      await notifyCompanyManagers(svc, fieldUser.company_id, {
+        type: "device_blocked",
+        title: "Tentativa de acesso em outro aparelho",
+        message: `O código de ${fieldUser.name} foi usado em um aparelho diferente do vinculado. Se a troca for legítima, desvincule o aparelho atual em Entrevistadores.`,
+        link_page: "Interviewers",
+        link_id: fieldUser.id,
+      });
+      return json({
+        error: "Este código já está vinculado a outro celular. Peça ao gestor para desvincular o aparelho anterior.",
+        code: "device_blocked",
+      }, 409);
+    }
 
     // Pesquisas ativas SOMENTE da empresa do entrevistador
     const { data: activeSurveys } = await svc

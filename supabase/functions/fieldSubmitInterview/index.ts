@@ -7,6 +7,7 @@
 import {
   corsHeaders, json, serviceClient, sleep, monthStartISO,
   clientIp, rateLimit, tooMany,
+  ACCESS_CODE_RE, checkDeviceBinding, notifyCompanyManagers, alreadyNotifiedThisMonth,
 } from "../_shared/utils.ts";
 
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -22,8 +23,8 @@ Deno.serve(async (req) => {
     const ipRl = await rateLimit(svc, `fieldSubmit:ip:${ip}`, 60, 600, 1800);
     if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
 
-    const { code, interview = {}, audio_base64 } = await req.json().catch(() => ({}));
-    if (!/^\d{8}$/.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
+    const { code, interview = {}, audio_base64, device_id, device_label } = await req.json().catch(() => ({}));
+    if (!ACCESS_CODE_RE.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
 
     const { data: users } = await svc
       .from("field_users").select("*").eq("access_code", code).eq("active", true).limit(1);
@@ -35,6 +36,16 @@ Deno.serve(async (req) => {
       return json({ error: "Código inválido ou entrevistador inativo." }, 401);
     }
     const fieldUser = users[0];
+
+    // Vínculo de dispositivo também no envio: sem isso, bastaria pular a tela
+    // de login para contornar a trava.
+    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
+    if (dev.blocked) {
+      return json({
+        error: "Este código está vinculado a outro celular. Peça ao gestor para desvincular o aparelho anterior.",
+        code: "device_blocked",
+      }, 409);
+    }
 
     // Idempotência: se a mesma entrevista (client_uuid gerado no aparelho) já
     // foi registrada, devolve o id existente em vez de duplicar. Isso cobre o
@@ -140,6 +151,29 @@ Deno.serve(async (req) => {
         if (dup2 && dup2.length > 0) return json({ id: dup2[0].id, audio_url: dup2[0].audio_url, duplicate: true });
       }
       return json({ error: insErr.message }, 500);
+    }
+
+    // Aviso de cota: 80% e 95% do limite mensal da empresa, uma vez por mês
+    // cada. Dá tempo do gestor renovar antes de o campo parar.
+    if (monthlyLimit > 0) {
+      const { data: ci2 } = await svc.from("interviews").select("completed_at, created_date")
+        .eq("company_id", fieldUser.company_id).eq("status", "concluida");
+      const ms2 = monthStartISO();
+      const used2 = (ci2 || []).filter((iv) => (iv.completed_at || iv.created_date || "") >= ms2).length;
+      const pct = (used2 / monthlyLimit) * 100;
+      const level = pct >= 95 ? 95 : pct >= 80 ? 80 : 0;
+      if (level > 0) {
+        const type = `quota_${level}`;
+        if (!(await alreadyNotifiedThisMonth(svc, fieldUser.company_id, type))) {
+          const restam = Math.max(monthlyLimit - used2, 0);
+          await notifyCompanyManagers(svc, fieldUser.company_id, {
+            type,
+            title: level >= 95 ? "Cota mensal quase esgotada" : "Cota mensal em 80%",
+            message: `Sua empresa já realizou ${used2} de ${monthlyLimit} entrevistas do mês (${Math.round(pct)}%). Restam ${restam}. Para ampliar o limite, fale com a plataforma pelo WhatsApp.`,
+            link_page: "Companies",
+          });
+        }
+      }
     }
 
     return json({ id: created.id, audio_url: audioUrl, audio_failed: audioFailed });

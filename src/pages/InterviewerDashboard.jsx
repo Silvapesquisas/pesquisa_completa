@@ -90,7 +90,7 @@ function CodeLoginMini({ onLogin }) {
   const [error, setError] = useState("");
 
   const handle = async () => {
-    if (code.length !== 8) { setError("O código deve ter 8 dígitos."); return; }
+    if (code.length < 8 || code.length > 12) { setError("O código deve ter entre 8 e 12 dígitos."); return; }
     setLoading(true); setError("");
     try {
       // Login validado no servidor (entidades protegidas por RLS)
@@ -115,11 +115,11 @@ function CodeLoginMini({ onLogin }) {
           <h1 className="text-lg font-bold text-gray-900">Meu Painel</h1>
           <p className="text-sm text-gray-500 mt-1">Digite seu código de acesso para ver seu progresso</p>
         </div>
-        <Input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+        <Input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 12))}
           placeholder="00000000" className="text-center text-2xl tracking-[0.5em] font-mono font-bold h-14"
-          maxLength={8} inputMode="numeric" onKeyDown={e => e.key === "Enter" && handle()} />
+          maxLength={12} inputMode="numeric" onKeyDown={e => e.key === "Enter" && handle()} />
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
-        <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700" onClick={handle} disabled={loading || code.length !== 8}>
+        <Button className="w-full h-11 bg-blue-600 hover:bg-blue-700" onClick={handle} disabled={loading || code.length < 8}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ver meu painel"}
         </Button>
       </div>

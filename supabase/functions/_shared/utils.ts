@@ -91,3 +91,89 @@ export function monthStartISO() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
+
+// Código de acesso do App de Campo. Novos códigos têm 12 dígitos; os de 8
+// gerados antes continuam válidos (ver ACCESS_CODE_RE).
+export const ACCESS_CODE_DIGITS = 12;
+export const ACCESS_CODE_RE = /^\d{8,12}$/;
+
+export function generateAccessCode(digits = ACCESS_CODE_DIGITS) {
+  // crypto.getRandomValues: aleatoriedade criptográfica (não Math.random).
+  const bytes = new Uint32Array(digits);
+  crypto.getRandomValues(bytes);
+  let code = "";
+  for (let i = 0; i < digits; i++) code += String(bytes[i] % 10);
+  // evita começar com 0 para não perder dígitos em campos numéricos
+  if (code[0] === "0") code = "1" + code.slice(1);
+  return code;
+}
+
+// ── Vínculo de dispositivo ────────────────────────────────────────────────
+// Um código só funciona em um aparelho por vez. Devolve:
+//   ok            -> pode seguir
+//   blocked       -> outro aparelho já está vinculado
+//   justBound     -> este aparelho acabou de assumir o vínculo
+export type DeviceCheck = { ok: boolean; blocked?: boolean; justBound?: boolean };
+
+export async function checkDeviceBinding(
+  svc: ReturnType<typeof serviceClient>,
+  fieldUser: Record<string, unknown>,
+  deviceId: string,
+  deviceLabel?: string,
+): Promise<DeviceCheck> {
+  const bound = (fieldUser.device_id as string) || null;
+  const now = new Date().toISOString();
+
+  if (!deviceId) return { ok: true }; // app antigo, sem device: não trava
+
+  if (!bound) {
+    await svc.from("field_users").update({
+      device_id: deviceId,
+      device_label: (deviceLabel || "").slice(0, 120),
+      device_bound_at: now,
+      last_seen_at: now,
+    }).eq("id", fieldUser.id as string);
+    return { ok: true, justBound: true };
+  }
+
+  if (bound !== deviceId) return { ok: false, blocked: true };
+
+  await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
+  return { ok: true };
+}
+
+// Cria uma notificação para todos os gestores (admin/supervisor) da empresa.
+export async function notifyCompanyManagers(
+  svc: ReturnType<typeof serviceClient>,
+  companyId: string,
+  n: { type: string; title: string; message: string; link_page?: string; link_id?: string },
+) {
+  const { data: managers } = await svc
+    .from("users").select("email")
+    .eq("company_id", companyId).in("role", ["admin", "supervisor"]);
+  if (!managers || managers.length === 0) return;
+  await svc.from("notifications").insert(
+    managers.map((m: { email: string }) => ({
+      user_email: m.email,
+      company_id: companyId,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      read: false,
+      link_page: n.link_page || null,
+      link_id: n.link_id || null,
+    })),
+  );
+}
+
+// Evita repetir a mesma notificação para a empresa dentro do mês.
+export async function alreadyNotifiedThisMonth(
+  svc: ReturnType<typeof serviceClient>,
+  companyId: string,
+  type: string,
+) {
+  const { data } = await svc.from("notifications")
+    .select("id").eq("company_id", companyId).eq("type", type)
+    .gte("created_date", monthStartISO()).limit(1);
+  return !!(data && data.length > 0);
+}

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Search, Plus, UserCheck, UserX, Pencil, Trash2,
-  ClipboardList, Phone, MapPin, BarChart2, Copy, KeyRound
+  ClipboardList, Phone, MapPin, BarChart2, Copy, KeyRound, Smartphone
 } from "lucide-react";
 
 // Limite de usuários externos por empresa: entre 4 e 25 (definido pelo super-admin)
@@ -85,6 +85,20 @@ export default function Interviewers() {
       (filterStatus === "inativo" && u.active === false);
     return matchSearch && matchStatus;
   });
+
+  // Libera o código para ser usado em outro celular (troca de aparelho,
+  // desligamento do entrevistador). Só o admin da empresa faz isso.
+  const unbindDevice = async (u) => {
+    if (!confirm(`Desvincular o aparelho de ${u.name}? O código poderá ser usado em outro celular no próximo acesso.`)) return;
+    try {
+      await base44.entities.FieldUser.update(u.id, {
+        device_id: null, device_label: null, device_bound_at: null,
+      });
+      load();
+    } catch (e) {
+      alert("Erro ao desvincular: " + (e?.message || "tente novamente."));
+    }
+  };
 
   const toggleActive = async (u) => {
     await base44.entities.FieldUser.update(u.id, { active: !u.active });
@@ -200,7 +214,7 @@ export default function Interviewers() {
 
       <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3 rounded-lg flex items-start gap-2">
         <KeyRound className="w-4 h-4 mt-0.5 shrink-0" />
-        <span>Cada entrevistador recebe um <strong>código de 8 dígitos</strong> para acessar o App de Campo. Compartilhe o código com eles.</span>
+        <span>Cada entrevistador recebe um <strong>código de 12 dígitos</strong> para acessar o App de Campo. O código funciona em <strong>um celular por vez</strong>: o primeiro aparelho que entrar fica vinculado.</span>
       </div>
 
       {/* Filters */}
@@ -267,6 +281,33 @@ export default function Interviewers() {
                       <span className="flex items-center gap-1"><BarChart2 className="w-3 h-3" />{completed} entrevistas</span>
                       <span className="flex items-center gap-1"><ClipboardList className="w-3 h-3" />{assignedCount} pesquisas</span>
                     </div>
+                    {/* Aparelho vinculado: o código só funciona neste celular */}
+                    <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
+                      {u.device_id ? (
+                        <>
+                          <span className="flex items-center gap-1 text-green-700 bg-green-50 px-2 py-0.5 rounded">
+                            <Smartphone className="w-3 h-3" />
+                            {u.device_label || "Aparelho vinculado"}
+                          </span>
+                          {u.device_bound_at && (
+                            <span className="text-gray-400">
+                              desde {new Date(u.device_bound_at).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => unbindDevice(u)}
+                            className="text-red-500 hover:text-red-700 hover:underline"
+                            title="Libera o código para ser usado em outro celular"
+                          >
+                            Desvincular
+                          </button>
+                        </>
+                      ) : (
+                        <span className="flex items-center gap-1 text-gray-400">
+                          <Smartphone className="w-3 h-3" /> Nenhum aparelho vinculado — o próximo celular que entrar será vinculado
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex gap-2 shrink-0">
@@ -331,7 +372,7 @@ export default function Interviewers() {
             </div>
             <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700 flex items-center gap-2">
               <KeyRound className="w-4 h-4 shrink-0" />
-              Um código de 8 dígitos será gerado automaticamente.
+              Um código de 12 dígitos será gerado automaticamente.
             </div>
             <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={createUser} disabled={saving || !newForm.name}>
               {saving ? "Cadastrando..." : "Cadastrar e Gerar Código"}
