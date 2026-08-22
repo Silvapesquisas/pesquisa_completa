@@ -186,8 +186,8 @@ function CodeLogin({ onLogin }) {
           <Input
             value={code}
             onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 12))}
-            placeholder="00000000"
-            className="text-center text-2xl tracking-[0.5em] font-mono font-bold h-14"
+            placeholder="000000000000"
+            className="text-center text-xl tracking-[0.2em] font-mono font-bold h-14"
             maxLength={12}
             inputMode="numeric"
             onKeyDown={e => e.key === "Enter" && handleLogin()}
