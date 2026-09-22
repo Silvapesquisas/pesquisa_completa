@@ -1,9 +1,9 @@
-// Login e dados do App de Campo (entrevistadores acessam por código de 8
-// dígitos, sem conta). Usa service role para que as tabelas fiquem trancadas
-// por RLS para qualquer acesso anônimo direto.
+// Login e dados do App de Campo (entrevistadores acessam por código, sem
+// conta). Usa service role para que as tabelas fiquem trancadas por RLS para
+// qualquer acesso anônimo direto.
 //
-// Entrada:  { code: string, withInterviews?: boolean }
-// Saída:    { fieldUser, surveys, counts, myInterviews? }
+// Entrada:  { code, withInterviews?, device_id?, device_label? }
+// Saída:    { fieldUser, surveys, counts, quotas, myInterviews? }
 import {
   corsHeaders, json, serviceClient, sleep,
   clientIp, rateLimit, rateLimitReset, tooMany,
@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
     const fieldUser = users[0];
     await rateLimitReset(svc, failKey); // login correto zera as falhas do IP
 
-    // Um código só vale em UM aparelho por vez. Se outro celular já está
-    // vinculado, recusa e avisa os gestores da empresa.
+    // Um código só vale em UM aparelho por vez (a partir de DEVICE_LOCK_START).
+    // Se outro celular já está vinculado, recusa e avisa os gestores.
     const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
     if (dev.blocked) {
       await notifyCompanyManagers(svc, fieldUser.company_id, {

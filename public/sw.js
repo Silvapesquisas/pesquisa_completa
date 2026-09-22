@@ -7,10 +7,21 @@
  * rotas /api) nunca são cacheadas — os dados offline ficam a cargo do
  * localStorage do próprio app.
  */
-const CACHE_NAME = "entrevista-pro-v1";
+const CACHE_NAME = "entrevista-pro-v2";
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
+// Shell mínimo garantido já na instalação: sem isto, um entrevistador que
+// instala o app e sai da área de cobertura antes de abri-lo de novo ficaria
+// sem nada em cache. Os bundles com hash entram no cache no primeiro uso.
+const PRECACHE = ["/", "/index.html", "/manifest.json", "/manifest-campo.json", "/icon.svg", "/icon-192.png", "/apple-touch-icon.png"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      // addAll falha inteiro se um recurso falhar; adiciona um a um para que
+      // uma falha isolada não impeça a instalação do service worker.
+      .then((cache) => Promise.allSettled(PRECACHE.map((u) => cache.add(u))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {

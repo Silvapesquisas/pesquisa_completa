@@ -15,6 +15,7 @@ import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 import QuestionIndex from "@/components/fieldapp/QuestionIndex";
 import QuotaPanel from "@/components/fieldapp/QuotaPanel";
+import InstallApp from "@/components/fieldapp/InstallApp";
 import { quotaProgress, quotasExceededBy } from "@/lib/sampling";
 import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
 import { displayOptions } from "@/lib/optionOrder";
@@ -209,6 +210,7 @@ function CodeLogin({ onLogin }) {
         <p className="text-xs text-gray-400 text-center">
           Não sabe seu código? Solicite ao seu supervisor ou gestor da pesquisa.
         </p>
+        <InstallApp />
       </div>
     </div>
   );
@@ -974,6 +976,8 @@ export default function FieldApp() {
             </button>
           </div>
         </div>
+
+        <InstallApp className="mb-1" />
 
         <SyncStatusBar
           isOnline={isOnline} syncing={syncing} drafts={drafts}

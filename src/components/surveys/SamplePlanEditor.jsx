@@ -11,11 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Target, AlertTriangle, Wand2, Users } from "lucide-react";
-import {
-  buildSamplePlan, CONFIDENCE_LEVELS, fmtPct,
-} from "@/lib/sampling";
-
-const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+import { buildSamplePlan, CONFIDENCE_LEVELS, fmtPct } from "@/lib/sampling";
+import { uuidv4 } from "@/lib/uuid";
 
 // Opções discretas de uma questão, para preencher os grupos automaticamente.
 const optionsOfQuestion = (q) => {
@@ -41,7 +38,7 @@ export default function SamplePlanEditor({ survey, onChange }) {
   const set = (patch) => onChange(s => ({ ...s, ...patch }));
   const setStrata = (fn) => onChange(s => ({ ...s, strata: fn(Array.isArray(s.strata) ? s.strata : []) }));
 
-  const addStratum = () => setStrata(list => [...list, { id: uuid(), label: "", question_id: "", groups: [] }]);
+  const addStratum = () => setStrata(list => [...list, { id: uuidv4(), label: "", question_id: "", groups: [] }]);
   const removeStratum = (id) => setStrata(list => list.filter(s => s.id !== id));
   const patchStratum = (id, patch) => setStrata(list => list.map(s => (s.id === id ? { ...s, ...patch } : s)));
 

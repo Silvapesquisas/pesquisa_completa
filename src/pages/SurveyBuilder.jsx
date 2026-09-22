@@ -12,7 +12,7 @@ import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Li
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
+import { uuidv4 } from "@/lib/uuid";
 import QuestionBank from "@/components/surveys/QuestionBank";
 import QuestionImporter from "@/components/surveys/QuestionImporter";
 import SamplePlanEditor from "@/components/surveys/SamplePlanEditor";
