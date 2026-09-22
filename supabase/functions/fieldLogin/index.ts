@@ -1,9 +1,9 @@
-// Login e dados do App de Campo (entrevistadores acessam por código de 8
-// dígitos, sem conta). Usa service role para que as tabelas fiquem trancadas
-// por RLS para qualquer acesso anônimo direto.
+// Login e dados do App de Campo (entrevistadores acessam por código, sem
+// conta). Usa service role para que as tabelas fiquem trancadas por RLS para
+// qualquer acesso anônimo direto.
 //
-// Entrada:  { code: string, withInterviews?: boolean }
-// Saída:    { fieldUser, surveys, counts, myInterviews? }
+// Entrada:  { code, withInterviews?, device_id?, device_label? }
+// Saída:    { fieldUser, surveys, counts, quotas, myInterviews? }
 import {
   corsHeaders, json, serviceClient, sleep,
   clientIp, rateLimit, rateLimitReset, tooMany,
@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
     const fieldUser = users[0];
     await rateLimitReset(svc, failKey); // login correto zera as falhas do IP
 
-    // Um código só vale em UM aparelho por vez. Se outro celular já está
-    // vinculado, recusa e avisa os gestores da empresa.
+    // Um código só vale em UM aparelho por vez (a partir de DEVICE_LOCK_START).
+    // Se outro celular já está vinculado, recusa e avisa os gestores.
     const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
     if (dev.blocked) {
       await notifyCompanyManagers(svc, fieldUser.company_id, {
@@ -74,10 +74,28 @@ Deno.serve(async (req) => {
       if (iv.status === "concluida") counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1;
     }
 
+    // Cotas por estrato: progresso da PESQUISA (todos os entrevistadores),
+    // porque a cota vem do plano amostral e não do limite individual.
+    // Formato: { [surveyId]: { [questionId]: { [resposta]: quantidade } } }
+    const quotas: Record<string, Record<string, Record<string, number>>> = {};
+    const withStrata = surveys.filter((s) =>
+      Array.isArray(s.strata) && s.strata.some((st: Record<string, unknown>) => st?.question_id)
+    );
+    if (withStrata.length > 0) {
+      const { data: rows } = await svc.rpc("survey_stratum_counts", {
+        p_survey_ids: withStrata.map((s) => s.id),
+      });
+      for (const r of rows || []) {
+        const bySurvey = quotas[r.survey_id] ||= {};
+        const byQuestion = bySurvey[r.question_id] ||= {};
+        byQuestion[r.answer] = Number(r.total) || 0;
+      }
+    }
+
     // A cota mensal da empresa NÃO é exposta ao app de campo (informação
     // gerencial). A regra continua sendo aplicada no envio (fieldSubmitInterview).
     return json({
-      fieldUser, surveys, counts,
+      fieldUser, surveys, counts, quotas,
       ...(withInterviews ? { myInterviews: myInterviews || [] } : {}),
     });
   } catch (error) {

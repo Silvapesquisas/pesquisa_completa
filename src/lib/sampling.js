@@ -348,6 +348,74 @@ export function evaluateSample({ survey, interviews }) {
   };
 }
 
+/* ─────────────────────── Cotas de campo (App de Campo) ─────────────────────── */
+
+/**
+ * Progresso das cotas de uma pesquisa em campo.
+ *
+ * @param survey  pesquisa com o plano amostral
+ * @param counts  entrevistas concluídas por questão e resposta:
+ *                { [questionId]: { [resposta]: quantidade } }
+ * @returns null quando a pesquisa não tem estratos vinculados a questões;
+ *   caso contrário, cada estrato com a cota, o realizado e o que falta por grupo.
+ */
+export function quotaProgress({ survey, counts = {} }) {
+  const plan = buildSamplePlan(survey);
+  const dims = plan.strata.filter(s => s.question_id);
+  if (!dims.length || !plan.n) return null;
+
+  const strata = dims.map(st => {
+    // Casa a resposta registrada com o rótulo do grupo ignorando caixa e acento.
+    const byAnswer = counts[st.question_id] || {};
+    const normalized = new Map();
+    for (const [answer, qty] of Object.entries(byAnswer)) {
+      const key = normalizeLabel(answer);
+      normalized.set(key, (normalized.get(key) || 0) + (Number(qty) || 0));
+    }
+    const groups = st.groups.map(g => {
+      const done = normalized.get(normalizeLabel(g.label)) || 0;
+      const remaining = Math.max(0, g.quota - done);
+      return {
+        ...g,
+        done,
+        remaining,
+        full: done >= g.quota && g.quota > 0,
+        pct: g.quota > 0 ? Math.min(100, (done / g.quota) * 100) : 0,
+      };
+    });
+    return {
+      ...st,
+      groups,
+      done: groups.reduce((a, g) => a + g.done, 0),
+      quota: groups.reduce((a, g) => a + g.quota, 0),
+      // Entrevistas cujo valor não bate com nenhum grupo cadastrado.
+      unclassified: Math.max(0, Object.values(byAnswer).reduce((a, q) => a + (Number(q) || 0), 0)
+        - groups.reduce((a, g) => a + g.done, 0)),
+    };
+  });
+
+  return { n: plan.n, strata };
+}
+
+/**
+ * Grupos já completos em que a entrevista atual se encaixa.
+ * Usado para avisar o entrevistador antes de concluir — é um aviso, não um
+ * bloqueio: a entrevista já foi feita e descartá-la seria pior.
+ *
+ * @param answers  respostas da entrevista: { [questionId]: valor }
+ */
+export function quotasExceededBy(progress, answers = {}) {
+  if (!progress) return [];
+  const full = [];
+  for (const st of progress.strata) {
+    const given = normalizeLabel(answers[st.question_id]);
+    if (!given) continue;
+    const group = st.groups.find(g => normalizeLabel(g.label) === given);
+    if (group?.full) full.push({ stratum: st.label, group: group.label, done: group.done, quota: group.quota });
+  }
+  return full;
+}
+
 /** Formata uma margem/percentual no padrão brasileiro (uma casa decimal). */
 export const fmtPct = (v, digits = 1) =>
   (v == null || !Number.isFinite(v) ? "—" : `${v.toFixed(digits).replace(".", ",")}%`);

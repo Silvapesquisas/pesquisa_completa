@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X, Download, ChevronDown, ChevronUp } from "lucide-react";
-import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
+import { uuidv4 } from "@/lib/uuid";
 
 const QUESTION_BANK = {
   eleitoral_prefeito: {
