@@ -2,6 +2,7 @@
 // Usado pelos geradores de PDF e DOCX (mesma fonte de dados).
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { evaluateSample, marginOfError, populationOf, confidenceOf, designEffectOf } from "@/lib/sampling";
 
 const isChoice = (t) => ["unica_escolha", "multipla_escolha", "sim_nao"].includes(t);
 
@@ -69,7 +70,17 @@ export function buildReportModel({ surveyObj, interviews, options = {} }) {
   const interviewers = [...new Set(list.map(i => i.interviewer_name).filter(Boolean))];
   const withGeo = list.filter(i => i.latitude && i.longitude).length;
   const withAudio = list.filter(i => i.audio_url).length;
-  const marginError = total > 0 ? (1.96 * Math.sqrt(0.25 / total) * 100).toFixed(2) : "—";
+  // Precisão realizada: usa o universo e a estratificação cadastrados na
+  // pesquisa para corrigir a margem pelo tamanho da população e pelo
+  // desbalanceamento da amostra que efetivamente foi a campo.
+  const sample = surveyObj ? evaluateSample({ survey: surveyObj, interviews: list }) : null;
+  const nominal = marginOfError({
+    n: total, N: populationOf(surveyObj), confidence: confidenceOf(surveyObj),
+  });
+  // `marginError` segue como string em p.p. (compatível com o texto já existente
+  // nos geradores); passa a ser a margem REAL quando há plano amostral.
+  const realMargin = sample?.realMargin ?? nominal;
+  const marginError = realMargin != null ? realMargin.toFixed(2) : "—";
   const coords = list.filter(i => typeof i.latitude === "number" && typeof i.longitude === "number")
     .map(i => ({ lat: i.latitude, lng: i.longitude }));
 
@@ -114,5 +125,12 @@ export function buildReportModel({ surveyObj, interviews, options = {} }) {
     total, interviewers, withGeo, withAudio, marginError,
     periodStart, periodEnd, coords, questions, crosstabs,
     hasDemographics: !!(demo.sexo || demo.idade),
+    // Bloco de precisão e representatividade (null quando não há pesquisa
+    // selecionada ou plano amostral cadastrado).
+    sample,
+    nominalMargin: nominal,
+    population: populationOf(surveyObj),
+    confidence: confidenceOf(surveyObj),
+    declaredDeff: designEffectOf(surveyObj),
   };
 }

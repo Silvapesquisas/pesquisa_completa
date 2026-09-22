@@ -10,6 +10,7 @@ import {
   Table, TableRow, TableCell, WidthType, BorderStyle,
   Header, Footer, PageNumber,
 } from "docx";
+import { buildSamplePlan, fmtPct } from "@/lib/sampling";
 
 /** @type {[number, number, number]} */
 const ACCENT = [29, 78, 216];        // blue-700
@@ -41,15 +42,23 @@ const fmtDate = (value) => {
   } catch { return null; }
 };
 
-// Margem de erro para amostra aleatória simples (p = 0,5; IC 95%).
-const marginOfError = (n) => (n > 0 ? (1.96 * Math.sqrt(0.25 / n) * 100).toFixed(1).replace(".", ",") : null);
-
 const optionsOf = (q) => {
   if (q.type === "sim_nao") return ["Sim", "Não"];
   if (q.type === "escala") return ["1", "2", "3", "4", "5"];
   if (q.type === "aberta") return [];
   return (q.options || []).filter(o => String(o || "").trim() !== "");
 };
+
+// Explicita a base do cálculo da margem de erro — é a primeira coisa que um
+// solicitante técnico pergunta.
+function methodologyNote(plan) {
+  const parts = [`amostra aleatória${plan.hasStrata ? " estratificada" : ""} de ${plan.n} entrevistas`];
+  if (plan.N) parts.push(`universo de ${plan.N.toLocaleString("pt-BR")} (com correção de população finita)`);
+  else parts.push("população tratada como infinita");
+  parts.push("proporção de 50% (pior caso)");
+  if (plan.deff > 1) parts.push(`efeito de desenho de ${String(plan.deff).replace(".", ",")}`);
+  return parts.join("; ") + ".";
+}
 
 /**
  * Monta o modelo, independente de formato, usado pelo PDF e pelo DOCX.
@@ -68,19 +77,30 @@ export function buildSurveyExportModel(survey, company) {
     ? company.logo_url
     : null;
 
+  const plan = buildSamplePlan(survey);
+
   const fichaTecnica = [
     ["Entrevistas previstas", target > 0 ? `${target} entrevista(s)` : "A definir"],
+  ];
+  if (plan.N) fichaTecnica.push(["Universo (público-alvo)", `${plan.N.toLocaleString("pt-BR")} pessoas`]);
+  fichaTecnica.push(
     ["Período de campo", start && end ? `${start} a ${end}` : (start ? `A partir de ${start}` : (end ? `Até ${end}` : "A definir"))],
     ["Questões do instrumento", `${questions.length}`],
     ["Tipo de pesquisa", CATEGORY_LABEL[survey?.category] || survey?.category || "—"],
     ["Situação", STATUS_LABEL[survey?.status] || survey?.status || "—"],
-  ];
+  );
   if (Number(survey?.max_interviews_per_interviewer) > 0) {
     fichaTecnica.push(["Máximo por entrevistador", `${Number(survey.max_interviews_per_interviewer)} entrevista(s)`]);
   }
-  if (target > 0) fichaTecnica.push(["Margem de erro estimada", `${marginOfError(target)}% (IC 95%)`]);
+  if (plan.margin != null) {
+    fichaTecnica.push(["Margem de erro estimada", `± ${fmtPct(plan.margin)} (IC ${plan.confidence}%)`]);
+    fichaTecnica.push(["Base do cálculo", methodologyNote(plan)]);
+  }
+  if (plan.deff > 1) fichaTecnica.push(["Efeito de desenho", String(plan.deff).replace(".", ",")]);
   fichaTecnica.push(["Registro de áudio", survey?.require_audio ? "Obrigatório em todas as entrevistas" : "Não obrigatório"]);
-  fichaTecnica.push(["Coleta", "Aplicação presencial com questionário digital e registro de geolocalização"]);
+  fichaTecnica.push(["Coleta", plan.hasStrata
+    ? "Aplicação presencial com questionário digital, cotas por estrato e registro de geolocalização"
+    : "Aplicação presencial com questionário digital e registro de geolocalização"]);
 
   return {
     company: {
@@ -93,6 +113,7 @@ export function buildSurveyExportModel(survey, company) {
     title: survey?.title || "Pesquisa",
     description: (survey?.description || "").trim(),
     targetInterviews: target,
+    plan,
     fichaTecnica,
     emittedAt: format(new Date(), "dd/MM/yyyy", { locale: ptBR }),
     questions: questions.map((q, i) => {
@@ -217,7 +238,9 @@ export async function buildSurveyPDF(survey, company) {
     y += gap;
   };
   const sectionTitle = (text) => {
-    ensure(16);
+    // Reserva espaço para o título e o começo do conteúdo, para o cabeçalho
+    // da seção não ficar sozinho no pé da página.
+    ensure(32);
     doc.setFillColor(...ACCENT);
     doc.rect(M.left, y, CONTENT_W, 8, "F");
     doc.setFont("helvetica", "bold");
@@ -271,7 +294,7 @@ export async function buildSurveyPDF(survey, company) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(120, 128, 140);
-    doc.text(`Margem de erro estimada de ${marginOfError(model.targetInterviews)}% para um intervalo de confiança de 95%.`,
+    doc.text(`Margem de erro estimada de ± ${fmtPct(model.plan.margin)} para um intervalo de confiança de ${model.plan.confidence}%.`,
       M.left + 10 + numW, y + 12.5);
     y += 23;
   }
@@ -282,7 +305,7 @@ export async function buildSurveyPDF(survey, company) {
   model.fichaTecnica.forEach(([k, v], i) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    const valueLines = doc.splitTextToSize(String(v), CONTENT_W - 62);
+    const valueLines = doc.splitTextToSize(String(v), CONTENT_W - 65);
     const rowH = Math.max(7, valueLines.length * 4.4 + 2.6);
     ensure(rowH);
     if (i % 2 === 0) {
@@ -298,6 +321,68 @@ export async function buildSurveyPDF(survey, company) {
     y += rowH;
   });
   y += 8;
+
+  // ── Plano amostral (cotas por estrato) ──
+  if (model.plan.hasStrata && model.plan.n) {
+    sectionTitle("Plano amostral — distribuição das entrevistas");
+    paragraph(
+      `As ${model.plan.n} entrevistas são distribuídas proporcionalmente à participação de cada grupo no universo, `
+      + "de modo que a amostra reproduza a composição da população pesquisada.",
+      { size: 8.5, gap: 5 },
+    );
+
+    const COLS = [{ w: 74, align: "left" }, { w: 30, align: "right" }, { w: 30, align: "right" }, { w: 40, align: "right" }];
+    /** @type {[number, number, number]} */
+    const ZEBRA = [250, 251, 253];
+    /** @type {[number, number, number]} */
+    const HEAD_FILL = [241, 245, 249];
+    /** @type {[number, number, number]} */
+    const HEAD_TEXT = [71, 85, 105];
+    const drawRow = (cells, { bold = false, fill = null, color = TEXT } = {}) => {
+      ensure(7);
+      if (fill) { doc.setFillColor(fill[0], fill[1], fill[2]); doc.rect(M.left, y - 4.5, CONTENT_W, 7, "F"); }
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...color);
+      let x = M.left + 3;
+      cells.forEach((c, i) => {
+        const col = COLS[i];
+        if (col.align === "right") doc.text(String(c), x + col.w - 6, y, { align: "right" });
+        else doc.text(doc.splitTextToSize(String(c), col.w - 6)[0], x, y);
+        x += col.w;
+      });
+      y += 7;
+    };
+
+    model.plan.strata.forEach((st) => {
+      // Mantém o quadro do estrato inteiro na mesma página sempre que couber.
+      ensure(Math.min(10 + 7 * (st.groups.length + 2), 120));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...HEADING);
+      doc.text(st.label, M.left, y);
+      y += 6;
+      drawRow(["Grupo", "% do universo", "Entrevistas", "Margem do grupo"],
+        { bold: true, fill: HEAD_FILL, color: HEAD_TEXT });
+      st.groups.forEach((g, gi) => drawRow(
+        [g.label, fmtPct(g.normalizedShare), String(g.quota), `± ${fmtPct(g.margin)}`],
+        { fill: gi % 2 === 0 ? ZEBRA : null },
+      ));
+      drawRow(["Total", "100,0%", String(st.groups.reduce((a, g) => a + g.quota, 0)), `± ${fmtPct(model.plan.margin)}`],
+        { bold: true, color: HEADING });
+      if (!st.shareOk) {
+        paragraph(`Atenção: as participações informadas para "${st.label}" somam ${fmtPct(st.shareSum)} e foram renormalizadas para 100%.`,
+          { size: 7.5, style: "italic", color: [180, 83, 9], gap: 1 });
+      }
+      y += 5;
+    });
+
+    paragraph(
+      "A margem de erro por grupo é sempre maior que a do total, porque cada recorte tem menos entrevistas. "
+      + "Leituras por estrato devem considerar a margem da própria linha.",
+      { size: 7.5, style: "italic", color: [140, 148, 160], gap: 6 },
+    );
+  }
 
   // ── Questionário ──
   sectionTitle("Questionário");
@@ -537,7 +622,7 @@ export async function buildSurveyDOCX(survey, company) {
                 new TextRun({ text: "entrevistas previstas", bold: true, size: 19, color: "1E293B" }),
               ],
             }),
-            P(`Margem de erro estimada de ${marginOfError(model.targetInterviews)}% para um intervalo de confiança de 95%.`,
+            P(`Margem de erro estimada de ± ${fmtPct(model.plan.margin)} para um intervalo de confiança de ${model.plan.confidence}%.`,
               { size: 15, color: GRAY_HEX, spacingAfter: 0 }),
           ],
         })],
@@ -565,6 +650,68 @@ export async function buildSurveyDOCX(survey, company) {
     })),
   }));
   children.push(P("", { spacingAfter: 200 }));
+
+  // ── Plano amostral (cotas por estrato) ──
+  if (model.plan.hasStrata && model.plan.n) {
+    children.push(sectionTitle("Plano amostral — distribuição das entrevistas"));
+    children.push(P(
+      `As ${model.plan.n} entrevistas são distribuídas proporcionalmente à participação de cada grupo no universo, `
+      + "de modo que a amostra reproduza a composição da população pesquisada.",
+      { size: 17, color: "374151", spacingAfter: 140 },
+    ));
+
+    const headCell = (text, size, align) => new TableCell({
+      width: { size, type: WidthType.PERCENTAGE },
+      shading: { fill: "F1F5F9" },
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      borders: { top: NO_BORDER, bottom: { style: BorderStyle.SINGLE, size: 2, color: "E2E8F0" }, left: NO_BORDER, right: NO_BORDER },
+      children: [P(text, { bold: true, size: 15, color: "475569", alignment: align, spacingAfter: 0 })],
+    });
+    const dataCell = (text, size, align, { bold = false, shaded = false } = {}) =>
+      cell([P(text, { size: 16, color: bold ? "1E293B" : "374151", bold, alignment: align, spacingAfter: 0 })], size, shaded);
+
+    const R = AlignmentType.RIGHT;
+    model.plan.strata.forEach((st) => {
+      children.push(P(st.label, { bold: true, size: 19, color: "1E293B", spacingAfter: 60 }));
+      children.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER },
+        rows: [
+          new TableRow({
+            tableHeader: true,
+            children: [headCell("Grupo", 43), headCell("% do universo", 18, R), headCell("Entrevistas", 16, R), headCell("Margem do grupo", 23, R)],
+          }),
+          ...st.groups.map((g, gi) => new TableRow({
+            children: [
+              dataCell(g.label, 43, undefined, { shaded: gi % 2 === 0 }),
+              dataCell(fmtPct(g.normalizedShare), 18, R, { shaded: gi % 2 === 0 }),
+              dataCell(String(g.quota), 16, R, { shaded: gi % 2 === 0 }),
+              dataCell(`± ${fmtPct(g.margin)}`, 23, R, { shaded: gi % 2 === 0 }),
+            ],
+          })),
+          new TableRow({
+            children: [
+              dataCell("Total", 43, undefined, { bold: true }),
+              dataCell("100,0%", 18, R, { bold: true }),
+              dataCell(String(st.groups.reduce((a, g) => a + g.quota, 0)), 16, R, { bold: true }),
+              dataCell(`± ${fmtPct(model.plan.margin)}`, 23, R, { bold: true }),
+            ],
+          }),
+        ],
+      }));
+      if (!st.shareOk) {
+        children.push(P(`Atenção: as participações informadas para "${st.label}" somam ${fmtPct(st.shareSum)} e foram renormalizadas para 100%.`,
+          { size: 15, italics: true, color: "B45309", spacingAfter: 60 }));
+      }
+      children.push(P("", { spacingAfter: 120 }));
+    });
+
+    children.push(P(
+      "A margem de erro por grupo é sempre maior que a do total, porque cada recorte tem menos entrevistas. "
+      + "Leituras por estrato devem considerar a margem da própria linha.",
+      { size: 15, italics: true, color: "8C94A0", spacingAfter: 200 },
+    ));
+  }
 
   // ── Questionário ──
   children.push(sectionTitle("Questionário"));

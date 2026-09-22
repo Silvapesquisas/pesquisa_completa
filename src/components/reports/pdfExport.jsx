@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { renderChart } from "@/components/reports/chartImage";
+import { fmtPct, fmtDeviation } from "@/lib/sampling";
 
 const TEMPLATES = {
   eleitoral: {
@@ -106,7 +107,7 @@ export async function generatePDF(model, options = {}) {
     `Trabalho de campo: ${model.periodStart} a ${model.periodEnd}`,
     `Total de entrevistas: ${model.total}`,
     `Margem de erro: ${model.marginError}% (p/ mais ou p/ menos)`,
-    `Intervalo de confiança: 95%`,
+    `Intervalo de confiança: ${model.confidence}%`,
     `Entrevistadores: ${model.interviewers.length}`,
     `Entrevistas com GPS: ${model.withGeo}`,
   ];
@@ -153,7 +154,9 @@ export async function generatePDF(model, options = {}) {
       ["Tipo de Pesquisa:", "Pesquisa quantitativa do tipo Survey, fundamentada na Teoria da Amostragem, com amostras probabilísticas estratificadas."],
       ["Instrumento de Coleta:", "Questionário estruturado digital, com registro automático de geolocalização e opção de gravação de áudio."],
       ["Tamanho da Amostra:", `${model.total} entrevistas presenciais e individuais, realizadas de ${model.periodStart} a ${model.periodEnd}.`],
-      ["Margem de Erro:", `${model.marginError}% (p/ mais ou p/ menos), com Intervalo de Confiança de 95%.`],
+      ["Margem de Erro:", model.sample?.weighted
+        ? `${model.marginError}% (p/ mais ou p/ menos), com Intervalo de Confiança de ${model.confidence}%. Margem efetiva, já corrigida pelo tamanho do universo e pela composição realizada da amostra (margem nominal: ${model.nominalMargin != null ? model.nominalMargin.toFixed(2) : "—"}%).`
+        : `${model.marginError}% (p/ mais ou p/ menos), com Intervalo de Confiança de ${model.confidence}%.`],
       ["Georreferenciamento:", `${model.withGeo} entrevistas (${model.total > 0 ? ((model.withGeo / model.total) * 100).toFixed(1) : 0}%) com coordenadas GPS, permitindo controle territorial e verificação dos percursos.`],
       ["Registro de Áudio:", `${model.withAudio} entrevistas (${model.total > 0 ? ((model.withAudio / model.total) * 100).toFixed(1) : 0}%) com áudio para auditoria e conferência de respostas.`],
       ["Equipe de Campo:", `${model.interviewers.length} entrevistador(es): ${model.interviewers.join(", ") || "—"}.`],
@@ -168,6 +171,94 @@ export async function generatePDF(model, options = {}) {
       doc.text(lines, 20, y + 5);
       y += 6 + lines.length * 4.5 + 4;
     });
+  }
+
+  // ── PRECISÃO E REPRESENTATIVIDADE ──────────────────────────────────
+  // Confronta a composição da amostra com a do universo: quanto mais a
+  // amostra desviou dos estratos, menor a amostra efetiva e maior a margem.
+  if (sections.representatividade && model.sample) {
+    const sp = model.sample;
+    doc.addPage(); pg++; header(doc, title, accent); footer(doc, pg); y = 18;
+    y = sectionTitle(doc, "PRECISÃO E REPRESENTATIVIDADE DA AMOSTRA", y, accent);
+
+    const kv = [
+      ["Universo (público-alvo)", model.population ? `${model.population.toLocaleString("pt-BR")} pessoas` : "Não informado"],
+      ["Entrevistas realizadas", String(sp.n)],
+      ["Nível de confiança", `${sp.confidence}%`],
+      ["Margem de erro nominal", `± ${fmtPct(sp.nominalMargin)}`],
+    ];
+    if (sp.weighted) {
+      kv.push(
+        ["Entrevistas ponderadas", `${sp.matched}${sp.unmatched ? ` (${sp.unmatched} fora dos estratos)` : ""}`],
+        ["Efeito de desenho — ponderação", sp.weightingDeff.toFixed(2).replace(".", ",")],
+      );
+    }
+    if (sp.declaredDeff > 1) kv.push(["Efeito de desenho — declarado", String(sp.declaredDeff).replace(".", ",")]);
+    if (sp.weighted) kv.push(["Amostra efetiva", `${sp.effectiveN} entrevistas`]);
+    kv.push(["Margem de erro real", `± ${fmtPct(sp.realMargin)}`]);
+
+    kv.forEach(([k, v], i) => {
+      y = ensureSpace(y, 8);
+      if (i % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(20, y - 4.5, 170, 7.5, "F"); }
+      doc.setFontSize(8.5); doc.setFont("helvetica", "bold"); doc.setTextColor(71, 85, 105);
+      doc.text(k, 23, y);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(30, 41, 59);
+      doc.text(String(v), 110, y);
+      y += 7.5;
+    });
+    y += 6;
+
+    const linked = (sp.strata || []).filter(st => st.linked);
+    if (linked.length) {
+      const COLS = [{ w: 56 }, { w: 24, r: true }, { w: 24, r: true }, { w: 26, r: true }, { w: 20, r: true }, { w: 20, r: true }];
+      const row = (cells, { bold = false, fill = null, color = [55, 65, 81] } = {}) => {
+        y = ensureSpace(y, 7);
+        if (fill) { doc.setFillColor(...fill); doc.rect(20, y - 4.5, 170, 7, "F"); }
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(...color);
+        let x = 23;
+        cells.forEach((c, i) => {
+          const col = COLS[i];
+          if (col.r) doc.text(String(c), x + col.w - 5, y, { align: "right" });
+          else doc.text(doc.splitTextToSize(String(c), col.w - 4)[0], x, y);
+          x += col.w;
+        });
+        y += 7;
+      };
+
+      linked.forEach(st => {
+        y = ensureSpace(y, Math.min(14 + 7 * st.groups.length, 90));
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...accent);
+        doc.text(st.label, 20, y); y += 6;
+        row(["Grupo", "% universo", "% amostra", "Desvio", "Entrev.", "Peso"],
+          { bold: true, fill: [241, 245, 249], color: [71, 85, 105] });
+        st.groups.forEach((g, gi) => row([
+          g.label,
+          fmtPct(g.normalizedShare),
+          fmtPct(g.sampleShare),
+          fmtDeviation(g.deviation),
+          String(g.count),
+          g.weight != null ? g.weight.toFixed(2).replace(".", ",") : "—",
+        ], {
+          fill: gi % 2 === 0 ? [250, 251, 253] : null,
+          // Destaca em vermelho os grupos que ficaram mais de 5 p.p. fora.
+          color: Math.abs(g.deviation ?? 0) > 5 ? [185, 28, 28] : [55, 65, 81],
+        }));
+        y += 4;
+      });
+    }
+
+    y = ensureSpace(y, 30);
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(120);
+    const note = sp.weighted
+      ? "A margem nominal considera apenas o número de entrevistas e o tamanho do universo. A margem real leva em conta "
+        + "o desbalanceamento da amostra: os pesos de pós-estratificação (raking) reproduzem a composição do universo e "
+        + "reduzem a amostra a um tamanho efetivo equivalente (efeito de desenho de Kish). Quanto maiores os desvios por "
+        + "grupo, menor a amostra efetiva e maior a margem real."
+      : "Não há estratos vinculados a questões do instrumento, portanto não foi possível medir a representatividade da "
+        + "amostra. A margem apresentada considera apenas o número de entrevistas, o universo e o efeito de desenho declarado.";
+    doc.text(doc.splitTextToSize(note, 170), 20, y);
   }
 
   // ── MAPA ───────────────────────────────────────────────────────────

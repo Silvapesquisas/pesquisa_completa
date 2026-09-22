@@ -15,6 +15,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { v4 as uuidv4 } from "https://cdn.jsdelivr.net/npm/uuid@9/+esm";
 import QuestionBank from "@/components/surveys/QuestionBank";
 import QuestionImporter from "@/components/surveys/QuestionImporter";
+import SamplePlanEditor from "@/components/surveys/SamplePlanEditor";
 
 const QUESTION_TYPES = [
   { value: "aberta", label: "Resposta Aberta" },
@@ -245,9 +246,31 @@ function QuestionCard({ question, allQuestions, onChange, onDelete, onDuplicate,
   );
 }
 
+// Campo numérico vazio precisa ir como null: "" quebra colunas numéricas.
+const numOrNull = (v) => {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Descarta estratos/grupos incompletos e grava as participações como número.
+const cleanStrata = (strata) =>
+  (Array.isArray(strata) ? strata : [])
+    .map(s => ({
+      id: s.id,
+      label: String(s.label || "").trim(),
+      question_id: s.question_id || null,
+      groups: (s.groups || [])
+        .map(g => ({ label: String(g.label || "").trim(), share: numOrNull(g.share) ?? 0 }))
+        .filter(g => g.label !== ""),
+    }))
+    .filter(s => s.label !== "" && s.groups.length > 0);
+
 const EMPTY_SURVEY = {
   title: "", description: "", category: "urbano", status: "rascunho",
-  questions: [], target_interviews: "", start_date: "", end_date: "", require_audio: false
+  questions: [], target_interviews: "", start_date: "", end_date: "", require_audio: false,
+  // Plano amostral
+  population_size: "", confidence_level: 95, design_effect: "", target_margin: "", strata: []
 };
 
 export default function SurveyBuilder() {
@@ -387,6 +410,12 @@ export default function SurveyBuilder() {
         max_interviews_per_interviewer: survey.max_interviews_per_interviewer !== "" && survey.max_interviews_per_interviewer != null
           ? Number(survey.max_interviews_per_interviewer)
           : undefined,
+        // Plano amostral: campos numéricos vazios precisam ir como null.
+        population_size: numOrNull(survey.population_size),
+        confidence_level: numOrNull(survey.confidence_level) ?? 95,
+        design_effect: numOrNull(survey.design_effect),
+        target_margin: numOrNull(survey.target_margin),
+        strata: cleanStrata(survey.strata),
         // Campos de data vazios precisam ir como null: uma string "" quebra a
         // coluna `date` no banco ("invalid input syntax for type date").
         start_date: survey.start_date || null,
@@ -501,6 +530,8 @@ export default function SurveyBuilder() {
           </div>
         </CardContent>
       </Card>
+
+      <SamplePlanEditor survey={survey} onChange={setSurvey} />
 
       <div className="space-y-3">
         {showBank && (

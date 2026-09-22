@@ -5,6 +5,7 @@ import {
 } from "docx";
 import { format } from "date-fns";
 import { renderChart } from "@/components/reports/chartImage";
+import { fmtPct, fmtDeviation } from "@/lib/sampling";
 
 const SUBTITLE = {
   eleitoral: "Relatório Descritivo contendo informações técnicas, distribuição territorial dos resultados e representação gráfica",
@@ -44,6 +45,26 @@ function statsTable(model) {
         new TableCell({ width: { size: 55, type: WidthType.PERCENTAGE }, children: [P(v)] }),
       ],
     })),
+  });
+}
+
+// Tabela simples com cabeçalho: usada pelo bloco de representatividade.
+function simpleTable(headers, rows, widths) {
+  const head = new TableRow({
+    tableHeader: true,
+    children: headers.map((h, i) => new TableCell({
+      width: { size: widths[i], type: WidthType.PERCENTAGE },
+      children: [P(h, { bold: true })],
+    })),
+  });
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [head, ...rows.map(cells => new TableRow({
+      children: cells.map((c, i) => new TableCell({
+        width: { size: widths[i], type: WidthType.PERCENTAGE },
+        children: [P(String(c))],
+      })),
+    }))],
   });
 }
 
@@ -99,12 +120,73 @@ export async function generateDOCX(model, options = {}) {
       ["Tipo de Pesquisa", "Pesquisa quantitativa do tipo Survey, com amostras probabilísticas estratificadas."],
       ["Instrumento de Coleta", "Questionário estruturado digital, com geolocalização automática e opção de gravação de áudio."],
       ["Tamanho da Amostra", `${model.total} entrevistas, de ${model.periodStart} a ${model.periodEnd}.`],
-      ["Margem de Erro", `${model.marginError}% (p/ mais ou p/ menos), IC de 95%.`],
+      ["Margem de Erro", model.sample?.weighted
+        ? `${model.marginError}% (p/ mais ou p/ menos), IC de ${model.confidence}%. Margem efetiva, já corrigida pelo tamanho do universo e pela composição realizada da amostra (nominal: ${model.nominalMargin != null ? model.nominalMargin.toFixed(2) : "—"}%).`
+        : `${model.marginError}% (p/ mais ou p/ menos), IC de ${model.confidence}%.`],
       ["Georreferenciamento", `${model.withGeo} entrevistas (${model.total > 0 ? ((model.withGeo / model.total) * 100).toFixed(1) : 0}%) com GPS.`],
       ["Registro de Áudio", `${model.withAudio} entrevistas (${model.total > 0 ? ((model.withAudio / model.total) * 100).toFixed(1) : 0}%) com áudio para auditoria.`],
       ["Equipe de Campo", `${model.interviewers.length} entrevistador(es): ${model.interviewers.join(", ") || "—"}.`],
     ];
     meth.forEach(([k, v]) => children.push(new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: `${k}: `, bold: true }), new TextRun({ text: v })] })));
+  }
+
+  // Precisão e representatividade
+  if (sections.representatividade && model.sample) {
+    const sp = model.sample;
+    children.push(H("Precisão e representatividade da amostra"));
+
+    const kv = [
+      ["Universo (público-alvo)", model.population ? `${model.population.toLocaleString("pt-BR")} pessoas` : "Não informado"],
+      ["Entrevistas realizadas", String(sp.n)],
+      ["Nível de confiança", `${sp.confidence}%`],
+      ["Margem de erro nominal", `± ${fmtPct(sp.nominalMargin)}`],
+    ];
+    if (sp.weighted) {
+      kv.push(
+        ["Entrevistas ponderadas", `${sp.matched}${sp.unmatched ? ` (${sp.unmatched} fora dos estratos)` : ""}`],
+        ["Efeito de desenho — ponderação", sp.weightingDeff.toFixed(2).replace(".", ",")],
+      );
+    }
+    if (sp.declaredDeff > 1) kv.push(["Efeito de desenho — declarado", String(sp.declaredDeff).replace(".", ",")]);
+    if (sp.weighted) kv.push(["Amostra efetiva", `${sp.effectiveN} entrevistas`]);
+    kv.push(["Margem de erro real", `± ${fmtPct(sp.realMargin)}`]);
+
+    children.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: kv.map(([k, v]) => new TableRow({
+        children: [
+          new TableCell({ width: { size: 45, type: WidthType.PERCENTAGE }, children: [P(k, { bold: true })] }),
+          new TableCell({ width: { size: 55, type: WidthType.PERCENTAGE }, children: [P(v)] }),
+        ],
+      })),
+    }));
+    children.push(P(""));
+
+    (sp.strata || []).filter(st => st.linked).forEach(st => {
+      children.push(H(st.label, HeadingLevel.HEADING_2));
+      children.push(simpleTable(
+        ["Grupo", "% universo", "% amostra", "Desvio", "Entrev.", "Peso"],
+        st.groups.map(g => [
+          g.label,
+          fmtPct(g.normalizedShare),
+          fmtPct(g.sampleShare),
+          fmtDeviation(g.deviation),
+          String(g.count),
+          g.weight != null ? g.weight.toFixed(2).replace(".", ",") : "—",
+        ]),
+        [34, 14, 14, 16, 11, 11],
+      ));
+      children.push(P(""));
+    });
+
+    children.push(P(sp.weighted
+      ? "A margem nominal considera apenas o número de entrevistas e o tamanho do universo. A margem real leva em conta o "
+        + "desbalanceamento da amostra: os pesos de pós-estratificação (raking) reproduzem a composição do universo e reduzem "
+        + "a amostra a um tamanho efetivo equivalente (efeito de desenho de Kish). Quanto maiores os desvios por grupo, menor "
+        + "a amostra efetiva e maior a margem real."
+      : "Não há estratos vinculados a questões do instrumento, portanto não foi possível medir a representatividade da amostra. "
+        + "A margem apresentada considera apenas o número de entrevistas, o universo e o efeito de desenho declarado.",
+      { italics: true, color: "888888", size: 16 }));
   }
 
   // Mapa
