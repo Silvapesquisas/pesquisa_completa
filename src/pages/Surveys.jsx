@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Edit, BarChart2, Trash2, Play, Pause, Copy, History } from "lucide-react";
+import { Plus, Search, Edit, BarChart2, Trash2, Play, Pause, Copy, History, FileDown, FileText, FileType2, Loader2 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportSurveyPDF, exportSurveyDOCX } from "@/components/surveys/surveyExport";
 
 const statusColor = { rascunho: "secondary", ativa: "default", pausada: "outline", encerrada: "destructive" };
 const categoryLabel = { urbano: "🏙️ Urbano", rural: "🌾 Rural", ambiental: "🌿 Ambiental", social: "👥 Social", mercado: "📊 Mercado", eleitoral: "🗳️ Eleitoral", outro: "📋 Outro" };
@@ -23,15 +25,22 @@ export default function Surveys() {
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versions, setVersions] = useState([]);
   const [versioningSurvey, setVersioningSurvey] = useState(null);
+  const [company, setCompany] = useState(null);
+  const [exportingId, setExportingId] = useState(null);
   const navigate = useNavigate();
 
   const load = async () => {
     const me = await base44.auth.me();
     const companyId = me?.company_id;
-    const data = companyId
-      ? await base44.entities.Survey.filter({ company_id: companyId }, "-created_date")
-      : await base44.entities.Survey.list("-created_date");
+    const [data, co] = await Promise.all([
+      companyId
+        ? base44.entities.Survey.filter({ company_id: companyId }, "-created_date")
+        : base44.entities.Survey.list("-created_date"),
+      // Dados da empresa responsável usados no cabeçalho do questionário exportado.
+      companyId ? base44.entities.Company.filter({ id: companyId }) : Promise.resolve([]),
+    ]);
     setSurveys(data);
+    setCompany(co?.[0] || null);
     setLoading(false);
   };
   useEffect(() => { load().catch(() => {}); }, []);
@@ -59,6 +68,19 @@ export default function Surveys() {
       questions: (s.questions || []).map(q => ({ ...q, id: crypto.randomUUID() })),
     });
     load();
+  };
+
+  const exportSurvey = async (s, kind) => {
+    setExportingId(s.id);
+    try {
+      // A pesquisa da listagem já traz as questões; recarrega para garantir a versão atual.
+      const fresh = (await base44.entities.Survey.filter({ id: s.id }))?.[0] || s;
+      if (kind === "docx") await exportSurveyDOCX(fresh, company);
+      else await exportSurveyPDF(fresh, company);
+    } catch (e) {
+      alert("Erro ao exportar a pesquisa: " + (e?.message || "tente novamente."));
+    }
+    setExportingId(null);
   };
 
   const openVersions = async (s) => {
@@ -158,6 +180,27 @@ export default function Surveys() {
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate(createPageUrl(`Interviews?survey_id=${s.id}`))}>
                     <BarChart2 className="w-3 h-3 mr-1" /> Dados
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" title="Exportar questionário" disabled={exportingId === s.id}>
+                        {exportingId === s.id
+                          ? <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                          : <FileDown className="w-4 h-4 text-gray-400" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs font-normal text-gray-500">
+                        Exportar questionário
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => exportSurvey(s, "pdf")}>
+                        <FileText className="w-4 h-4 mr-2 text-red-500" /> PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportSurvey(s, "docx")}>
+                        <FileType2 className="w-4 h-4 mr-2 text-blue-500" /> Word (DOCX)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button size="sm" variant="ghost" title="Duplicar" onClick={() => duplicateSurvey(s)}>
                     <Copy className="w-4 h-4 text-gray-400" />
                   </Button>
