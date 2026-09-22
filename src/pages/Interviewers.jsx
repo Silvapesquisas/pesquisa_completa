@@ -13,6 +13,7 @@ import {
   Search, Plus, UserCheck, UserX, Pencil, Trash2,
   ClipboardList, Phone, MapPin, BarChart2, Copy, KeyRound, Smartphone
 } from "lucide-react";
+import FieldAppAccess from "@/components/interviewers/FieldAppAccess";
 
 // Limite de usuários externos por empresa: entre 4 e 25 (definido pelo super-admin)
 const MIN_FIELD_USERS = 4;
@@ -217,6 +218,8 @@ export default function Interviewers() {
         <KeyRound className="w-4 h-4 mt-0.5 shrink-0" />
         <span>Cada entrevistador recebe um <strong>código de 12 dígitos</strong> para acessar o App de Campo. O código funciona em <strong>um celular por vez</strong>: o primeiro aparelho que entrar fica vinculado.</span>
       </div>
+
+      <FieldAppAccess companyName={company?.name || ""} />
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
