@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, Target, BarChart2 } from "lucide-react";
+import { MapPin, Mic, MicOff, CheckCircle2, ChevronRight, ChevronLeft, Loader2, Save, List, KeyRound, LogOut, BookOpen, Target, BarChart2, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import FieldNotifications from "@/components/fieldapp/FieldNotifications";
@@ -14,10 +14,15 @@ import SyncErrorBanner from "@/components/fieldapp/SyncErrorBanner";
 import DraftsList from "@/components/fieldapp/DraftsList";
 import OfflineSurveys from "@/components/fieldapp/OfflineSurveys";
 import QuestionIndex from "@/components/fieldapp/QuestionIndex";
+import QuotaPanel from "@/components/fieldapp/QuotaPanel";
+import { quotaProgress, quotasExceededBy } from "@/lib/sampling";
 import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
 import { displayOptions } from "@/lib/optionOrder";
 
 const FIELD_USER_KEY = "fieldapp_user";
+// Último progresso de cotas recebido do servidor, para o painel continuar
+// útil offline (somado às entrevistas concluídas ainda não sincronizadas).
+const QUOTAS_KEY = "fieldapp_quotas";
 
 const OTHER_LABEL = "Outra";
 // Reconhece a opção "Outra/Outro/Outros" que o usuário tenha digitado na lista,
@@ -235,6 +240,10 @@ export default function FieldApp() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
   const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
+  // Cotas por estrato: { surveyId: { questionId: { resposta: quantidade } } }
+  const [quotaCounts, setQuotaCounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(QUOTAS_KEY) || "{}"); } catch { return {}; }
+  });
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
   const startTime = useRef(null);
@@ -270,6 +279,10 @@ export default function FieldApp() {
       setFieldUser(res.fieldUser);
       setOnlineSurveys(res.surveys || []);
       setMyInterviewCounts(res.counts || {});
+      if (res.quotas) {
+        setQuotaCounts(res.quotas);
+        try { localStorage.setItem(QUOTAS_KEY, JSON.stringify(res.quotas)); } catch { /* cota de storage cheia */ }
+      }
     } catch {
       // silently fail
     }
@@ -294,6 +307,34 @@ export default function FieldApp() {
   drafts.filter(d => d.status === "concluida").forEach(d => {
     effectiveCounts[d.survey_id] = (effectiveCounts[d.survey_id] || 0) + 1;
   });
+
+  // Entrevistas concluídas ainda não sincronizadas também contam nas cotas,
+  // senão o entrevistador offline continuaria vendo o grupo como incompleto.
+  const localQuotaCounts = (surveyId) => {
+    const out = {};
+    drafts.filter(d => d.status === "concluida" && d.survey_id === surveyId).forEach(d => {
+      (d.answers || []).forEach(a => {
+        const v = a.answer_array?.length ? a.answer_array[0] : a.answer;
+        if (!v) return;
+        out[a.question_id] = out[a.question_id] || {};
+        out[a.question_id][v] = (out[a.question_id][v] || 0) + 1;
+      });
+    });
+    return out;
+  };
+
+  // Progresso das cotas de uma pesquisa (servidor + concluídas locais).
+  const quotaFor = (survey) => {
+    if (!survey) return null;
+    const server = quotaCounts[survey.id] || {};
+    const local = localQuotaCounts(survey.id);
+    const merged = { ...server };
+    for (const [qid, byAnswer] of Object.entries(local)) {
+      merged[qid] = { ...(merged[qid] || {}) };
+      for (const [ans, qty] of Object.entries(byAnswer)) merged[qid][ans] = (merged[qid][ans] || 0) + qty;
+    }
+    return quotaProgress({ survey, counts: merged });
+  };
 
   // Retorna o limite efetivo: personalizado do entrevistador ou padrão da pesquisa
   const getEffectiveLimit = (survey) => {
@@ -526,6 +567,18 @@ export default function FieldApp() {
       alert("Esta pesquisa exige a gravação de áudio para auditoria. Grave o áudio antes de concluir a entrevista.");
       return;
     }
+    // Cotas: avisa (sem bloquear) quando o entrevistado cai em um grupo já
+    // completo. A entrevista já foi feita — descartá-la seria pior do que
+    // registrar um excedente, que a ponderação do relatório corrige.
+    const full = quotasExceededBy(quotaFor(selectedSurvey), answers);
+    if (full.length > 0) {
+      const lista = full.map(f => `• ${f.stratum}: ${f.group} (${f.done}/${f.quota})`).join("\n");
+      if (!confirm(
+        `A cota destes grupos já está completa:\n\n${lista}\n\n`
+        + "Registrar mais entrevistas aqui desequilibra a amostra e aumenta a margem de erro. "
+        + "Deseja concluir mesmo assim?"
+      )) return;
+    }
     setSaving(true);
     const interviewData = buildInterviewData();
     if (!isOnline) {
@@ -656,12 +709,31 @@ export default function FieldApp() {
 
   // ── REVIEW ──
   if (step === "review") {
+    const quotaWarnings = quotasExceededBy(quotaFor(selectedSurvey), answers);
     return (
       <div className="min-h-screen bg-gray-50 p-4 space-y-4 pb-36">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-1">Revisão Final</h2>
           <p className="text-sm text-gray-500">{selectedSurvey?.title}</p>
         </div>
+
+        {/* Avisa antes de concluir: o entrevistado caiu em grupo já completo. */}
+        {quotaWarnings.length > 0 && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
+            <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2 mb-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" /> Cota já completa
+            </h3>
+            <ul className="text-xs text-amber-800 space-y-0.5 mb-2">
+              {quotaWarnings.map(w => (
+                <li key={`${w.stratum}-${w.group}`}>{w.stratum}: <strong>{w.group}</strong> ({w.done}/{w.quota})</li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-amber-700 leading-snug">
+              Você ainda pode concluir, mas registrar excedentes aqui desequilibra a amostra e aumenta a margem de erro
+              da pesquisa. Priorize os grupos que ainda faltam.
+            </p>
+          </div>
+        )}
         <div className={`rounded-2xl p-5 shadow-sm space-y-3 border-2 ${location ? "bg-white border-green-200" : "bg-orange-50 border-orange-300"}`}>
           <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
             <MapPin className={`w-4 h-4 ${location ? "text-green-600" : "text-orange-500"}`} />
@@ -912,6 +984,21 @@ export default function FieldApp() {
         <div id="drafts-section">
           <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} />
         </div>
+
+        {/* Cotas: o entrevistador vê, antes de abordar alguém, quais grupos
+            ainda faltam na pesquisa. */}
+        {allSurveys.map(s => {
+          const progress = quotaFor(s);
+          if (!progress) return null;
+          return (
+            <QuotaPanel
+              key={`quota-${s.id}`}
+              progress={progress}
+              title={allSurveys.length > 1 ? s.title : "Cotas da pesquisa"}
+              compact={allSurveys.length > 1}
+            />
+          );
+        })}
 
         <OfflineSurveys
           surveys={allSurveys}
