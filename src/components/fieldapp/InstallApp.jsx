@@ -22,7 +22,7 @@ const isIOS = () =>
   // iPadOS 13+ se identifica como Mac; o toque é o que o distingue.
   || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
-export default function InstallApp({ className = "" }) {
+export default function InstallApp({ className = "", pendingCount = 0 }) {
   const [deferred, setDeferred] = useState(null);
   const [installed, setInstalled] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
@@ -89,7 +89,15 @@ export default function InstallApp({ className = "" }) {
           <p className="text-sm font-semibold text-gray-900">Instalar no celular</p>
           <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
             Abre em tela cheia, direto pelo ícone, e continua funcionando sem internet.
+            {isIOS() && " No iPhone, instalar também evita que o sistema apague os dados do app após 7 dias sem uso."}
           </p>
+          {/* No iPhone o app instalado NÃO enxerga o que ficou no Safari. */}
+          {isIOS() && pendingCount > 0 && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mt-2 leading-snug">
+              Você tem <strong>{pendingCount} entrevista(s)</strong> guardada(s) neste navegador. <strong>Envie-as antes de instalar</strong>:
+              no iPhone, o app instalado começa vazio e não enxerga o que ficou no Safari.
+            </p>
+          )}
           <button
             onClick={install}
             className="mt-2.5 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg py-2.5 flex items-center justify-center gap-2"
@@ -115,6 +123,7 @@ export default function InstallApp({ className = "" }) {
               <Plus className="w-3.5 h-3.5" />
             </li>
             <li><span className="font-semibold">3.</span> Confirme em "Adicionar"</li>
+            <li><span className="font-semibold">4.</span> Abra pelo novo ícone <strong>Campo</strong> e entre com o mesmo código</li>
           </ol>
         </div>
       )}

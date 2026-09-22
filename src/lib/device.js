@@ -28,12 +28,24 @@ export function getDeviceLabel() {
       : /Chrome\//i.test(ua) && !/Edg\//i.test(ua) ? "Chrome"
       : /Firefox\//i.test(ua) ? "Firefox"
       : /Safari\//i.test(ua) ? "Safari" : "Navegador";
-    return `${os} · ${browser}`;
+    return `${os} · ${displayMode() === "standalone" ? "app instalado" : browser}`;
   } catch {
     return "Aparelho";
   }
 }
 
+// Aberto como app instalado (ícone na tela inicial) ou no navegador?
+// No iPhone isso importa: o app instalado tem armazenamento SEPARADO do Safari,
+// então ganha um device_id novo. O servidor usa esta informação para permitir,
+// uma única vez, a troca "Safari → app instalado" no mesmo tipo de aparelho.
+export function displayMode() {
+  try {
+    if (window.matchMedia?.("(display-mode: standalone)")?.matches) return "standalone";
+    if (window.navigator.standalone === true) return "standalone"; // iOS
+  } catch { /* ignore */ }
+  return "browser";
+}
+
 export function deviceInfo() {
-  return { device_id: getDeviceId(), device_label: getDeviceLabel() };
+  return { device_id: getDeviceId(), device_label: getDeviceLabel(), display_mode: displayMode() };
 }

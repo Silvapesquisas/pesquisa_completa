@@ -2,13 +2,14 @@
 // Valida tudo no servidor e NUNCA confia em company_id/field_user_id do cliente
 // — esses campos são forçados a partir do FieldUser dono do código.
 //
-// Entrada:  { code, interview, audio_base64? (data URL) }
+// Entrada:  { code, interview, audio_base64? (data URL), device_id, device_label?, display_mode? }
 // Saída:    { id, audio_url? }
 import {
   corsHeaders, json, serviceClient, sleep, monthStartISO,
   clientIp, rateLimit, tooMany,
   ACCESS_CODE_RE, checkDeviceBinding, notifyCompanyManagers, alreadyNotifiedThisMonth,
 } from "../_shared/utils.ts";
+import { acceptsSurveyStatus, detectAudioFormat, parseDataUrl } from "../_shared/rules.ts";
 
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 
@@ -18,19 +19,21 @@ Deno.serve(async (req) => {
     const svc = serviceClient();
     const ip = clientIp(req);
 
-    // Teto de envios por IP: 60 a cada 10 min (bem acima do ritmo real de
-    // campo); ao estourar, bloqueia por 30 min.
-    const ipRl = await rateLimit(svc, `fieldSubmit:ip:${ip}`, 60, 600, 1800);
+    // Teto por IP só contra inundação. O limite de ritmo de verdade é POR
+    // ENTREVISTADOR (abaixo): operadoras móveis colocam muitos celulares atrás
+    // do mesmo IP (CGNAT), e a equipe sincronizando junto no fim do dia não
+    // pode travar uma à outra.
+    const ipRl = await rateLimit(svc, `fieldSubmit:ip:${ip}`, 600, 600, 900);
     if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
 
-    const { code, interview = {}, audio_base64, device_id, device_label } = await req.json().catch(() => ({}));
+    const { code, interview = {}, audio_base64, device_id, device_label, display_mode } = await req.json().catch(() => ({}));
     if (!ACCESS_CODE_RE.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
 
     const { data: users } = await svc
       .from("field_users").select("*").eq("access_code", code).eq("active", true).limit(1);
     if (!users || users.length === 0) {
-      // Código errado aqui também é sinal de varredura: 8 falhas / 15 min.
-      const failRl = await rateLimit(svc, `fieldSubmit:fail:${ip}`, 8, 900, 900);
+      // Código errado aqui também é sinal de varredura: 20 falhas / 15 min.
+      const failRl = await rateLimit(svc, `fieldSubmit:fail:${ip}`, 20, 900, 900);
       if (!failRl.allowed) return tooMany(failRl.retryAfter, "Muitas tentativas com código inválido. Aguarde alguns minutos.");
       await sleep(400);
       return json({ error: "Código inválido ou entrevistador inativo." }, 401);
@@ -39,7 +42,18 @@ Deno.serve(async (req) => {
 
     // Vínculo de dispositivo também no envio: sem isso, bastaria pular a tela
     // de login para contornar a trava.
-    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
+    // Ritmo por entrevistador: 200 envios a cada 10 min cobre com folga uma
+    // fila grande acumulada offline sendo sincronizada de uma vez.
+    const userRl = await rateLimit(svc, `fieldSubmit:user:${fieldUser.id}`, 200, 600, 600);
+    if (!userRl.allowed) return tooMany(userRl.retryAfter);
+
+    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""), String(display_mode || ""));
+    if (dev.missing) {
+      return json({
+        error: "Não foi possível identificar este aparelho. Feche o app e abra de novo.",
+        code: "device_missing",
+      }, 400);
+    }
     if (dev.blocked) {
       return json({
         error: "Este código está vinculado a outro celular. Peça ao gestor para desvincular o aparelho anterior.",
@@ -67,7 +81,10 @@ Deno.serve(async (req) => {
     if (!survey || survey.company_id !== fieldUser.company_id) {
       return json({ error: "Pesquisa não encontrada para esta empresa." }, 404);
     }
-    if (survey.status !== "ativa") return json({ error: "Esta pesquisa não está mais ativa." }, 409);
+    // Pesquisa pausada/encerrada depois de a entrevista ter sido feita (comum
+    // offline): a entrevista concluída ANTES da mudança continua valendo.
+    const statusCheck = acceptsSurveyStatus(survey, interview.completed_at);
+    if (!statusCheck.ok) return json({ error: statusCheck.error }, 409);
     const assigned = fieldUser.assigned_survey_ids || [];
     if (assigned.length > 0 && !assigned.includes(survey.id)) {
       return json({ error: "Pesquisa não atribuída a este entrevistador." }, 403);
@@ -102,24 +119,25 @@ Deno.serve(async (req) => {
     // Áudio gravado no aparelho -> Supabase Storage (bucket "audio")
     let audioUrl: string | null = null;
     let audioFailed = false; // sinaliza ao app quando havia áudio mas o upload falhou
-    if (typeof audio_base64 === "string" && audio_base64.startsWith("data:")) {
-      const [, b64] = audio_base64.split(",");
-      if (b64) {
-        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-        if (bytes.length > MAX_AUDIO_BYTES) return json({ error: "Áudio excede o tamanho máximo permitido." }, 413);
-        try {
-          const path = `${fieldUser.company_id}/${crypto.randomUUID()}.webm`;
-          const { error: upErr } = await svc.storage.from("audio").upload(path, bytes, { contentType: "audio/webm" });
-          if (!upErr) {
-            // Guarda o CAMINHO no storage (bucket privado). O painel gera uma
-            // URL assinada temporária na hora de reproduzir/baixar.
-            audioUrl = path;
-          } else {
-            audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
-          }
-        } catch {
+    const parsedAudio = parseDataUrl(audio_base64);
+    if (parsedAudio && parsedAudio.b64) {
+      const bytes = Uint8Array.from(atob(parsedAudio.b64), (c) => c.charCodeAt(0));
+      if (bytes.length > MAX_AUDIO_BYTES) return json({ error: "Áudio excede o tamanho máximo permitido." }, 413);
+      try {
+        // Formato real do arquivo: o iPhone grava MP4/AAC, o Android WebM/Opus.
+        // Extensão e tipo corretos garantem a reprodução no painel.
+        const fmt = detectAudioFormat(parsedAudio.mime, bytes);
+        const path = `${fieldUser.company_id}/${crypto.randomUUID()}.${fmt.ext}`;
+        const { error: upErr } = await svc.storage.from("audio").upload(path, bytes, { contentType: fmt.contentType });
+        if (!upErr) {
+          // Guarda o CAMINHO no storage (bucket privado). O painel gera uma
+          // URL assinada temporária na hora de reproduzir/baixar.
+          audioUrl = path;
+        } else {
           audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
         }
+      } catch {
+        audioFailed = true; // falha no áudio não bloqueia o registro, mas é avisada
       }
     }
 

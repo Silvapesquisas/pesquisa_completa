@@ -98,12 +98,37 @@ const entities = Object.fromEntries(Object.keys(TABLES).map((n) => [n, entity(n)
 // usada para vincular o código a UM celular por vez.
 const FIELD_FUNCTIONS = new Set(["fieldLogin", "fieldSubmitInterview"]);
 
-// Invoca uma Edge Function preservando o contrato de erro (e.status / e.message)
-async function invokeFunction(name, body) {
+// Invoca uma Edge Function preservando o contrato de erro (e.status / e.message).
+// `timeoutMs` cancela a requisição: com sinal fraco ela pode ficar pendurada
+// indefinidamente, e o App de Campo precisa seguir em frente (a entrevista já
+// está salva no aparelho e o servidor descarta reenvios duplicados).
+async function invokeFunction(name, body, { timeoutMs } = {}) {
   const payload = FIELD_FUNCTIONS.has(name)
     ? { ...deviceInfo(), ...(body || {}) }
     : (body || {});
-  const { data, error } = await supabase.functions.invoke(name, { body: payload });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  let data, error;
+  try {
+    ({ data, error } = await supabase.functions.invoke(name, {
+      body: payload,
+      ...(controller ? { signal: controller.signal } : {}),
+    }));
+  } catch (e) {
+    if (controller?.signal.aborted) {
+      const te = new Error("Sem resposta do servidor (conexão lenta).");
+      te.timeout = true;
+      throw te;
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  if (error && controller?.signal.aborted) {
+    const te = new Error("Sem resposta do servidor (conexão lenta).");
+    te.timeout = true;
+    throw te;
+  }
   if (error) {
     let status = error?.context?.status;
     let message = error?.message;

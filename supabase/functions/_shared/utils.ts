@@ -1,5 +1,6 @@
 // Utilidades compartilhadas pelas Edge Functions (Deno).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decideDeviceBinding } from "./rules.ts";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,40 +132,72 @@ export function deviceLockActive(now = new Date()) {
 // Devolve:
 //   ok            -> pode seguir
 //   blocked       -> outro aparelho já está vinculado
+//   missing       -> requisição sem identificador de aparelho (recusada)
 //   justBound     -> este aparelho acabou de assumir o vínculo
+//   migrated      -> iPhone passou do Safari para o app instalado (vínculo trocado)
 //   grace         -> ainda na carência (libera sem vincular)
-export type DeviceCheck = { ok: boolean; blocked?: boolean; justBound?: boolean; grace?: boolean };
+export type DeviceCheck = {
+  ok: boolean; blocked?: boolean; missing?: boolean;
+  justBound?: boolean; migrated?: boolean; grace?: boolean;
+};
 
 export async function checkDeviceBinding(
-  svc: ReturnType<typeof serviceClient>,
+  svc: SvcClient,
   fieldUser: Record<string, unknown>,
   deviceId: string,
   deviceLabel?: string,
+  displayMode?: string,
 ): Promise<DeviceCheck> {
-  const bound = (fieldUser.device_id as string) || null;
   const now = new Date().toISOString();
+  const standalone = displayMode === "standalone";
+  const decision = decideDeviceBinding({
+    lockActive: deviceLockActive(),
+    bound: (fieldUser.device_id as string) || null,
+    boundLabel: String(fieldUser.device_label || ""),
+    boundStandalone: fieldUser.device_standalone === true,
+    deviceId,
+    deviceLabel: String(deviceLabel || ""),
+    displayMode: String(displayMode || ""),
+  });
 
-  if (!deviceId) return { ok: true }; // app antigo, sem device: não trava
-
-  if (!deviceLockActive()) {
-    await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
-    return { ok: true, grace: true };
+  switch (decision) {
+    case "grace":
+      await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
+      return { ok: true, grace: true };
+    case "missing":
+      return { ok: false, missing: true };
+    case "bind":
+      await svc.from("field_users").update({
+        device_id: deviceId,
+        device_label: (deviceLabel || "").slice(0, 120),
+        device_standalone: standalone,
+        device_bound_at: now,
+        last_seen_at: now,
+      }).eq("id", fieldUser.id as string);
+      return { ok: true, justBound: true };
+    case "same":
+      await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
+      return { ok: true };
+    case "migrate":
+      await svc.from("field_users").update({
+        device_id: deviceId,
+        device_label: (deviceLabel || "").slice(0, 120),
+        device_standalone: true,
+        device_bound_at: now,
+        last_seen_at: now,
+      }).eq("id", fieldUser.id as string);
+      // Informativo: o gestor fica sabendo da troca, que não exigiu ação dele.
+      await notifyCompanyManagers(svc, fieldUser.company_id as string, {
+        type: "device_migrated",
+        title: "Entrevistador passou a usar o app instalado",
+        message: `${fieldUser.name} instalou o App de Campo no iPhone e o vínculo foi transferido do Safari para o app. Se não reconhece esta troca, desvincule o aparelho em Entrevistadores.`,
+        link_page: "Interviewers",
+        link_id: fieldUser.id as string,
+      });
+      return { ok: true, migrated: true };
+    default:
+      return { ok: false, blocked: true };
   }
-
-  if (!bound) {
-    await svc.from("field_users").update({
-      device_id: deviceId,
-      device_label: (deviceLabel || "").slice(0, 120),
-      device_bound_at: now,
-      last_seen_at: now,
-    }).eq("id", fieldUser.id as string);
-    return { ok: true, justBound: true };
-  }
-
-  if (bound !== deviceId) return { ok: false, blocked: true };
-
-  await svc.from("field_users").update({ last_seen_at: now }).eq("id", fieldUser.id as string);
-  return { ok: true };
 }
 
 // Cria uma notificação para todos os gestores (admin/supervisor) da empresa.

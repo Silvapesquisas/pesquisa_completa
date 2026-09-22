@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,20 @@ const OTHER_LABEL = "Outra";
 // Reconhece a opção "Outra/Outro/Outros" que o usuário tenha digitado na lista,
 // para não duplicar com a opção especial gerada pelo allow_other.
 const isOtherOption = (opt) => /^outr[oa]s?$/i.test((opt || "").trim());
+
+// Formato da gravação. Cada plataforma grava num formato diferente: Android/Chrome
+// em WebM/Opus, iPhone em MP4/AAC. Antes o app rotulava tudo como WebM, e o áudio
+// do iPhone chegava ao painel com o tipo errado. Escolhe o primeiro suportado;
+// o tipo que vale no fim é o que o gravador informar.
+const AUDIO_MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus", "audio/aac"];
+function pickAudioMime() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") return "";
+  return AUDIO_MIME_CANDIDATES.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch { return false; } }) || "";
+}
+
+// Id do rascunho definido já no início da entrevista: todos os salvamentos
+// (autosave, segundo plano, conclusão) gravam no MESMO registro, sem duplicar.
+const newFieldDraftId = () => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 function QuestionField({ question, value, onChange, orderSeed }) {
   const type = question.type;
@@ -165,6 +179,8 @@ function CodeLogin({ onLogin }) {
     } catch (e) {
       if (!navigator.onLine) {
         setError("Sem conexão. O primeiro acesso precisa de internet; depois o app funciona offline.");
+      } else if (e?.code === "device_missing") {
+        setError(e.message || "Não foi possível identificar este aparelho. Feche o app e abra de novo.");
       } else if (e?.code === "device_blocked" || e?.status === 409) {
         setError("Este código já está sendo usado em outro celular. Peça ao gestor para desvincular o aparelho anterior em Entrevistadores.");
       } else if (e?.status === 401 || e?.status === 400) {
@@ -254,9 +270,23 @@ export default function FieldApp() {
 
   const {
     isOnline, drafts, syncing, lastSynced, syncLogs,
-    saveDraft, removeDraft, syncDrafts, clearLogs,
+    saveDraft, removeDraft, syncDrafts, sendDraft, retryDraft, loadDraftAudio, clearLogs,
     offlineSurveys, downloadSurvey, removeSurveyOffline, totalStorageBytes,
+    storageError, saveError, retryHydrate,
   } = useOfflineSync();
+
+  // Resultado da última entrevista concluída, para a tela final dizer a verdade:
+  // "enviada", "salva no celular, será enviada" ou "NÃO salva — não feche o app".
+  const [doneInfo, setDoneInfo] = useState(null);
+  // Enquanto a conclusão está em andamento, o autosave não pode regravar a
+  // entrevista como "em andamento" (isso a tiraria da fila de envio).
+  const submittingRef = useRef(false);
+  const stepRef = useRef("select");
+  // Se o áudio salvo não pôde ser lido ao reabrir o rascunho, o autosave deve
+  // MANTER o que está no aparelho em vez de gravar "sem áudio" por cima.
+  const keepStoredAudioRef = useRef(false);
+  const persistTimer = useRef(null);
+  const recordingInterruptedRef = useRef(false);
 
   // Try to restore session from localStorage
   useEffect(() => {
@@ -432,12 +462,19 @@ export default function FieldApp() {
       alert("Não foi possível acessar o microfone. Verifique as permissões do navegador/dispositivo.");
       return;
     }
-    mediaRecorder.current = new MediaRecorder(stream);
+    const mimeType = pickAudioMime();
+    try {
+      mediaRecorder.current = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      mediaRecorder.current = new MediaRecorder(stream);
+    }
     audioChunks.current = [];
     startTime.current = Date.now();
-    mediaRecorder.current.ondataavailable = e => audioChunks.current.push(e.data);
+    mediaRecorder.current.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.current.push(e.data); };
     mediaRecorder.current.onstop = async () => {
-      const blob = new Blob(audioChunks.current, { type: "audio/webm" });
+      // O tipo real vem do gravador (ou do próprio trecho gravado), nunca fixo.
+      const recordedType = (mediaRecorder.current?.mimeType || audioChunks.current[0]?.type || mimeType || "audio/webm").split(";")[0];
+      const blob = new Blob(audioChunks.current, { type: recordedType });
       const duration = (Date.now() - startTime.current) / 1000;
       setAudioDuration(duration);
       stream.getTracks().forEach(t => t.stop());
@@ -448,12 +485,17 @@ export default function FieldApp() {
       setAudioUrl(dataUrl);
       if (dataUrl.length <= MAX_OFFLINE_AUDIO_BYTES) {
         setAudioBase64(dataUrl);
+        keepStoredAudioRef.current = false;
+        // Grava o áudio no aparelho imediatamente: se o app for encerrado logo
+        // depois (comum no iPhone), a gravação não se perde.
+        persistNow({ audio: dataUrl });
       } else {
         setAudioBase64(null);
         alert("Áudio gravado, mas é muito longo para ser salvo com a entrevista. Grave trechos mais curtos.");
       }
     };
-    mediaRecorder.current.start();
+    // Fatias de 1 s: o áudio é coletado aos poucos em vez de só no fim.
+    mediaRecorder.current.start(1000);
     setRecording(true);
   };
 
@@ -556,11 +598,19 @@ export default function FieldApp() {
     };
   };
 
-  const saveAsDraft = (andExit = false) => {
+  // Áudio a gravar junto com a entrevista: o atual; ou, se o áudio salvo não pôde
+  // ser lido ao reabrir, "manter o que já está no aparelho" (undefined).
+  const audioForSave = () => (audioBase64 ? audioBase64 : (keepStoredAudioRef.current ? undefined : null));
+
+  const saveAsDraft = async (andExit = false) => {
     const data = buildInterviewData();
-    const draftId = saveDraft({ ...data, _draftId: currentDraftId, _audioBase64: audioBase64, status: "em_andamento" });
-    setCurrentDraftId(draftId);
-    if (andExit) { resetInterview(); } else { alert("Rascunho salvo!"); }
+    try {
+      const draftId = await saveDraft({ ...data, _draftId: currentDraftId, _audioBase64: audioForSave(), status: "em_andamento" });
+      setCurrentDraftId(draftId);
+      if (andExit) resetInterview(); else alert("Rascunho salvo no celular.");
+    } catch (e) {
+      alert(`${e.message}${andExit ? "\n\nA entrevista continua aberta." : ""}`);
+    }
   };
 
   const submit = async () => {
@@ -582,36 +632,64 @@ export default function FieldApp() {
       )) return;
     }
     setSaving(true);
+    submittingRef.current = true;
+    if (persistTimer.current) { clearTimeout(persistTimer.current); persistTimer.current = null; }
     const interviewData = buildInterviewData();
-    if (!isOnline) {
-      saveDraft({ ...interviewData, _draftId: currentDraftId, _audioBase64: audioBase64 });
-      setSaving(false);
-      setStep("done");
-      return;
-    }
+
+    // 1) SALVA NO APARELHO PRIMEIRO, já como concluída. Só depois tenta enviar.
+    //    Assim, se o sinal cair, a requisição travar ou o app for fechado no meio
+    //    do envio, a entrevista continua no celular e entra na fila de envio.
+    let draftId = currentDraftId || newFieldDraftId();
+    let savedLocally = true;
     try {
-      // O envio passa pela função backend, que valida o código de acesso e
-      // força empresa/entrevistador no servidor (entidades trancadas por RLS)
-      const res = await base44.functions.invoke("fieldSubmitInterview", {
-        code: fieldUser.access_code,
-        interview: interviewData,
-        audio_base64: audioBase64 || undefined,
-      });
-      if (currentDraftId) removeDraft(currentDraftId);
-      if (res?.audio_failed) alert("Entrevista enviada com sucesso, mas o áudio não pôde ser salvo (verifique a conexão ou o tamanho da gravação).");
-      setStep("done");
+      draftId = await saveDraft({ ...interviewData, _draftId: draftId, _audioBase64: audioForSave(), status: "concluida" });
     } catch (e) {
-      // Falha no envio (conexão instável, etc.): preserva como rascunho para sincronizar depois
-      saveDraft({ ...interviewData, _draftId: currentDraftId, _audioBase64: audioBase64 });
-      alert(`Falha ao enviar a entrevista${e?.message ? `: ${e.message}` : ""}. Ela foi salva como rascunho e será sincronizada automaticamente.`);
-      setStep("done");
+      savedLocally = false;
+      draftId = e.draftId || draftId;
     }
+    setCurrentDraftId(draftId);
+
+    // 2) Tenta enviar. A tela espera no máximo 25 s; se demorar mais, o envio
+    //    continua em segundo plano e, se falhar, a fila tenta de novo depois.
+    let outcome = savedLocally ? "queued" : "unsaved";
+    let errorMessage = null;
+    let audioFailed = false;
+    if (navigator.onLine) {
+      const sending = sendDraft(draftId);
+      sending.catch(() => { /* permanece na fila; a sincronização tenta de novo */ });
+      try {
+        const res = await Promise.race([
+          sending,
+          new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error("ui-timeout"), { uiTimeout: true })), 25_000)),
+        ]);
+        outcome = "sent";
+        audioFailed = !!res?.audio_failed;
+      } catch (e) {
+        if (!e?.uiTimeout && !e?.timeout) errorMessage = e?.message || null;
+      }
+    }
+
+    setDoneInfo({ outcome, errorMessage, audioFailed });
     setSaving(false);
+    setStep("done");
   };
 
-  const loadDraft = (draft) => {
+  const loadDraft = async (draft) => {
     const survey = allSurveys.find(s => s.id === draft.survey_id);
     if (!survey) { alert("Pesquisa do rascunho não encontrada. Baixe-a para uso offline."); return; }
+    // O áudio é lido do aparelho antes de abrir: se o autosave rodasse sem ele,
+    // gravaria "sem áudio" por cima da gravação salva.
+    let storedAudio = null;
+    keepStoredAudioRef.current = false;
+    if (draft._hasAudio) {
+      try {
+        storedAudio = await loadDraftAudio(draft._draftId);
+      } catch {
+        if (!confirm("Não foi possível ler o áudio desta entrevista agora. Abrir mesmo assim? O áudio salvo NÃO será apagado.")) return;
+        keepStoredAudioRef.current = true;
+      }
+    }
+    submittingRef.current = false;
     const answersMap = {};
     (draft.answers || []).forEach(a => {
       answersMap[a.question_id] = a.answer_array?.length > 0 ? a.answer_array.join("|") : a.answer;
@@ -622,8 +700,8 @@ export default function FieldApp() {
     setLocation(draft.latitude && draft.longitude
       ? { lat: draft.latitude, lng: draft.longitude, accuracy: draft.location_accuracy || null }
       : null);
-    setAudioBase64(draft._audioBase64 || null);
-    setAudioUrl(draft.audio_url || draft._audioBase64 || null);
+    setAudioBase64(storedAudio);
+    setAudioUrl(storedAudio);
     setAudioDuration(draft.audio_duration || 0);
     setCurrentDraftId(draft._draftId);
     clientUuidRef.current = draft.client_uuid || draft._draftId || crypto.randomUUID();
@@ -639,25 +717,85 @@ export default function FieldApp() {
   // e reiniciar o intervalo a cada tecla digitada.
   const autoSaveRef = useRef(null);
   autoSaveRef.current = selectedSurvey
-    ? { data: buildInterviewData(), draftId: currentDraftId, audioBase64 }
+    ? { data: buildInterviewData(), draftId: currentDraftId, audio: audioForSave() }
     : null;
+  stepRef.current = step;
 
-  useEffect(() => {
-    if (step !== "interview") {
-      if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
-      return;
+  // Grava o estado atual da entrevista no aparelho como "em andamento".
+  // `override.audio` grava um áudio recém-finalizado antes do próximo render.
+  const persistNow = useCallback(async (override = {}) => {
+    const snap = autoSaveRef.current;
+    if (!snap || submittingRef.current) return false;
+    if (stepRef.current !== "interview" && stepRef.current !== "review") return false;
+    const audio = "audio" in override ? override.audio : snap.audio;
+    const hasContent = (snap.data.answers || []).some(a => a.answer) || snap.data.notes || audio;
+    if (!hasContent) return false;
+    let draftId = snap.draftId;
+    if (!draftId) {
+      draftId = newFieldDraftId();
+      snap.draftId = draftId;
+      setCurrentDraftId(draftId);
     }
-    autoSaveTimer.current = setInterval(() => {
-      const snapshot = autoSaveRef.current;
-      if (!snapshot) return;
-      const draftId = saveDraft({ ...snapshot.data, _draftId: snapshot.draftId, _audioBase64: snapshot.audioBase64, status: "em_andamento" });
-      // Mantém o mesmo rascunho nos próximos auto-saves em vez de criar duplicados
-      if (!snapshot.draftId) setCurrentDraftId(draftId);
-      setAutoSaveMsg("Salvo automaticamente");
-      setTimeout(() => setAutoSaveMsg(""), 2000);
+    try {
+      await saveDraft({ ...snap.data, _draftId: draftId, _audioBase64: audio, status: "em_andamento" });
+      return true;
+    } catch {
+      return false; // o aviso aparece pelo saveError do hook
+    }
+  }, [saveDraft]);
+
+  // 1) A cada mudança (resposta, observação, localização): grava 1,5 s depois
+  //    da última alteração. Vale também na tela de revisão.
+  useEffect(() => {
+    if (step !== "interview" && step !== "review") return;
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => { persistTimer.current = null; persistNow(); }, 1500);
+    return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
+  }, [answers, notes, location, step, persistNow]);
+
+  // 2) Rede de segurança: a cada 30 s em entrevista e revisão.
+  useEffect(() => {
+    if (step !== "interview" && step !== "review") return;
+    const timer = setInterval(async () => {
+      if (await persistNow()) {
+        setAutoSaveMsg("Salvo automaticamente");
+        setTimeout(() => setAutoSaveMsg(""), 2000);
+      }
     }, 30000);
-    return () => clearInterval(autoSaveTimer.current);
-  }, [step, saveDraft]);
+    autoSaveTimer.current = timer;
+    return () => clearInterval(timer);
+  }, [step, persistNow]);
+
+  // 3) App indo para segundo plano (ligação, WhatsApp, câmera, tela bloqueada)
+  //    ou sendo fechado: grava NA HORA. O iPhone encerra apps em segundo plano
+  //    sem aviso, e o Android faz o mesmo quando falta memória.
+  useEffect(() => {
+    const onHide = () => {
+      if (stepRef.current !== "interview" && stepRef.current !== "review") return;
+      // Gravação em curso: finaliza para não perder o áudio (o iPhone corta o
+      // microfone em segundo plano). O onstop grava o trecho no aparelho.
+      if (mediaRecorder.current && mediaRecorder.current.state === "recording") {
+        recordingInterruptedRef.current = true;
+        try { mediaRecorder.current.stop(); } catch { /* já parado */ }
+        setRecording(false);
+      }
+      persistNow();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        onHide();
+      } else if (recordingInterruptedRef.current) {
+        recordingInterruptedRef.current = false;
+        alert("A gravação de áudio foi encerrada quando o app saiu da tela. O trecho gravado foi salvo; se precisar, grave o restante.");
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onHide);
+    };
+  }, [persistNow]);
 
   // Se uma regra de salto encurtar o caminho abaixo do índice atual
   // (ex.: voltar e mudar a resposta), mantém o índice dentro dos limites.
@@ -674,7 +812,11 @@ export default function FieldApp() {
     setAudioBase64(null); setAudioDuration(0);
     setNotes(""); setCurrentDraftId(null); setShowIndex(false);
     clientUuidRef.current = null;
+    submittingRef.current = false;
+    keepStoredAudioRef.current = false;
+    setDoneInfo(null);
     if (autoSaveTimer.current) clearInterval(autoSaveTimer.current);
+    if (persistTimer.current) { clearTimeout(persistTimer.current); persistTimer.current = null; }
   };
 
   // Loading state
@@ -693,13 +835,34 @@ export default function FieldApp() {
 
   // ── DONE ──
   if (step === "done") {
-    const savedOffline = !isOnline;
+    const outcome = doneInfo?.outcome || "queued";
+    const view = {
+      sent: {
+        bg: "from-green-50 to-emerald-50", icon: <CheckCircle2 className="w-16 h-16 text-green-500" />,
+        title: "Entrevista Enviada!",
+        text: doneInfo?.audioFailed
+          ? "Registrada no servidor, mas o áudio não pôde ser salvo (conexão ou tamanho da gravação)."
+          : "Registrada com sucesso no servidor.",
+      },
+      queued: {
+        bg: "from-blue-50 to-indigo-50", icon: <CheckCircle2 className="w-16 h-16 text-blue-500" />,
+        title: "Salva no celular",
+        text: doneInfo?.errorMessage
+          ? `Ainda não foi enviada: ${doneInfo.errorMessage}. Ela está guardada no celular e aparece em "Rascunhos Salvos".`
+          : "Ainda não foi enviada (sem conexão ou conexão lenta). Está guardada no celular e será enviada automaticamente quando houver internet — com o app aberto.",
+      },
+      unsaved: {
+        bg: "from-red-50 to-orange-50", icon: <AlertCircle className="w-16 h-16 text-red-500" />,
+        title: "ATENÇÃO: não foi salva no celular",
+        text: "O celular não permitiu gravar esta entrevista e ela ainda não foi enviada. NÃO feche o app: conecte-se à internet e toque em Sincronizar. Se o problema continuar, libere espaço no celular.",
+      },
+    }[outcome];
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex flex-col items-center justify-center p-6 gap-4">
-        <CheckCircle2 className="w-16 h-16 text-green-500" />
-        <h2 className="text-2xl font-bold text-gray-900">{savedOffline ? "Rascunho Salvo!" : "Entrevista Enviada!"}</h2>
-        <p className="text-gray-500 text-center text-sm">
-          {savedOffline ? "Sem conexão. Dados salvos localmente e sincronizados automaticamente ao voltar online." : "Registrado com sucesso."}
+      <div className={`min-h-screen bg-gradient-to-br ${view.bg} flex flex-col items-center justify-center p-6 gap-4`}>
+        {view.icon}
+        <h2 className={`text-2xl font-bold text-center ${outcome === "unsaved" ? "text-red-700" : "text-gray-900"}`}>{view.title}</h2>
+        <p className={`text-center text-sm max-w-sm ${outcome === "unsaved" ? "text-red-700 font-medium" : "text-gray-500"}`}>
+          {view.text}
         </p>
         <div className="w-full max-w-sm">
           <SyncStatusBar isOnline={isOnline} syncing={syncing} drafts={drafts} lastSynced={lastSynced} onSync={syncDrafts} syncLogs={syncLogs} onClearLogs={clearLogs} />
@@ -718,6 +881,13 @@ export default function FieldApp() {
           <h2 className="text-lg font-bold text-gray-900 mb-1">Revisão Final</h2>
           <p className="text-sm text-gray-500">{selectedSurvey?.title}</p>
         </div>
+
+        {saveError && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 text-sm text-red-800 font-medium flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            O celular não está salvando esta entrevista. Não feche o app; ao concluir, ela será enviada direto se houver internet.
+          </div>
+        )}
 
         {/* Avisa antes de concluir: o entrevistado caiu em grupo já completo. */}
         {quotaWarnings.length > 0 && (
@@ -885,6 +1055,12 @@ export default function FieldApp() {
                   : <><Mic className="w-5 h-5" /> Gravar áudio (obrigatório)</>}
             </button>
           )}
+          {saveError && (
+            <div className="mt-2 bg-red-600 rounded-lg px-3 py-2 text-xs text-white font-medium flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              O celular não está salvando esta entrevista. Não feche o app.
+            </div>
+          )}
           {limitReached && (
             <div className="mt-2 bg-orange-500 rounded-lg px-3 py-2 text-xs text-white flex items-center gap-2">
               <Target className="w-3.5 h-3.5 shrink-0" />
@@ -946,6 +1122,26 @@ export default function FieldApp() {
       )}
       <div className="p-5 space-y-5">
         {showTutorial && <OnboardingTutorial onClose={() => setShowTutorial(false)} />}
+        {storageError && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 mt-4">
+            <p className="text-sm font-semibold text-red-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" /> Não foi possível ler as entrevistas salvas
+            </p>
+            <p className="text-xs text-red-700 mt-1 leading-snug">{storageError}</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="outline" className="border-red-300 text-red-700" onClick={retryHydrate}>Tentar de novo</Button>
+              <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => window.location.reload()}>Recarregar o app</Button>
+            </div>
+          </div>
+        )}
+        {saveError && !storageError && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 mt-4">
+            <p className="text-sm font-semibold text-red-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" /> O celular não está salvando
+            </p>
+            <p className="text-xs text-red-700 mt-1 leading-snug">{saveError} Se continuar, libere espaço no celular.</p>
+          </div>
+        )}
         <div className="pt-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pesquisas de Campo</h1>
@@ -977,7 +1173,7 @@ export default function FieldApp() {
           </div>
         </div>
 
-        <InstallApp className="mb-1" />
+        <InstallApp className="mb-1" pendingCount={drafts.length} />
 
         <SyncStatusBar
           isOnline={isOnline} syncing={syncing} drafts={drafts}
@@ -986,7 +1182,7 @@ export default function FieldApp() {
         />
 
         <div id="drafts-section">
-          <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} />
+          <DraftsList drafts={drafts} onEdit={loadDraft} onDelete={deleteDraft} onRetry={retryDraft} syncing={syncing} />
         </div>
 
         {/* Cotas: o entrevistador vê, antes de abordar alguém, quais grupos
@@ -1024,7 +1220,8 @@ export default function FieldApp() {
             }
             setSelectedSurvey(s); setAnswers({}); setCurrentIndex(0); setLocation(null);
             setAudioUrl(null); setAudioBase64(null); setAudioDuration(0); setRecording(false);
-            setCurrentDraftId(null); clientUuidRef.current = crypto.randomUUID();
+            setCurrentDraftId(newFieldDraftId()); clientUuidRef.current = crypto.randomUUID();
+            submittingRef.current = false; keepStoredAudioRef.current = false;
             setStep("interview"); getLocation(true);
           }}
         />
