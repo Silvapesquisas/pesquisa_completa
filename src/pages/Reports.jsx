@@ -20,9 +20,9 @@ import { renderPointMap } from "@/components/reports/chartImage";
 import { captureStreetMap } from "@/components/reports/mapCapture";
 
 const TEMPLATE_DEFAULTS = {
-  eleitoral: { metodologia: true, mapa: true, resultados: true, cruzamentos: true, analise: true },
-  populacional: { metodologia: true, mapa: true, resultados: true, cruzamentos: false, analise: true },
-  executivo: { metodologia: false, mapa: true, resultados: true, cruzamentos: false, analise: false },
+  eleitoral: { metodologia: true, representatividade: true, mapa: true, resultados: true, cruzamentos: true, analise: true },
+  populacional: { metodologia: true, representatividade: true, mapa: true, resultados: true, cruzamentos: false, analise: true },
+  executivo: { metodologia: false, representatividade: true, mapa: true, resultados: true, cruzamentos: false, analise: false },
 };
 const TEMPLATE_LABEL = { eleitoral: "Opinião Pública / Eleitoral", populacional: "Populacional / Descritivo", executivo: "Executivo / Resumido" };
 const CHART_LABEL = { bar: "Barras horizontais", column: "Colunas verticais", pie: "Pizza", donut: "Rosca" };
@@ -388,6 +388,7 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
 
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <SectionToggle k="metodologia" label="Metodologia" />
+            <SectionToggle k="representatividade" label="Precisão e representatividade" />
             <SectionToggle k="mapa" label="Mapa / distribuição" />
             <SectionToggle k="resultados" label="Resultados por questão" />
             <SectionToggle k="cruzamentos" label="Cruzamentos (sexo/idade)" />
