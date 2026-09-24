@@ -3,7 +3,7 @@
 // — esses campos são forçados a partir do FieldUser dono do código.
 //
 // Entrada:  { code, interview, audio_base64? (data URL), device_id, device_label?, display_mode? }
-// Saída:    { id, audio_url? }
+// Saída:    { id, audio_url?, audio_failed? }
 import {
   corsHeaders, json, serviceClient, sleep, monthStartISO,
   clientIp, rateLimit, tooMany,
@@ -150,6 +150,10 @@ Deno.serve(async (req) => {
       company_id: fieldUser.company_id,
       status: "concluida",
       client_uuid: clientUuid,
+      // Versão do questionário com que a entrevista foi feita (pode ser anterior
+      // à atual, se ela ficou guardada offline enquanto o questionário mudou).
+      survey_version: Number.isInteger(interview.survey_version) && interview.survey_version > 0
+        ? interview.survey_version : null,
       answers: Array.isArray(interview.answers) ? interview.answers : [],
       latitude: typeof interview.latitude === "number" ? interview.latitude : null,
       longitude: typeof interview.longitude === "number" ? interview.longitude : null,
