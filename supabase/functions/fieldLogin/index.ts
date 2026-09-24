@@ -2,7 +2,7 @@
 // conta). Usa service role para que as tabelas fiquem trancadas por RLS para
 // qualquer acesso anônimo direto.
 //
-// Entrada:  { code, withInterviews?, device_id?, device_label? }
+// Entrada:  { code, withInterviews?, device_id, device_label?, display_mode? }
 // Saída:    { fieldUser, surveys, counts, quotas, myInterviews? }
 import {
   corsHeaders, json, serviceClient, sleep,
@@ -16,23 +16,27 @@ Deno.serve(async (req) => {
     const svc = serviceClient();
     const ip = clientIp(req);
 
-    // Teto geral por IP (protege contra varredura automatizada de códigos):
-    // 40 tentativas a cada 10 min; ao estourar, bloqueia por 30 min.
-    const ipRl = await rateLimit(svc, `fieldLogin:ip:${ip}`, 40, 600, 1800);
+    // Teto geral por IP contra inundação. Folgado de propósito: operadoras
+    // móveis colocam muitos celulares atrás do MESMO IP (CGNAT), e a equipe
+    // inteira abrindo o app ao mesmo tempo não pode ser barrada. A proteção
+    // contra adivinhação de códigos é o limite de ERROS logo abaixo.
+    const ipRl = await rateLimit(svc, `fieldLogin:ip:${ip}`, 300, 600, 900);
     if (!ipRl.allowed) return tooMany(ipRl.retryAfter);
 
-    const { code, withInterviews, device_id, device_label } = await req.json().catch(() => ({}));
+    const { code, withInterviews, device_id, device_label, display_mode } = await req.json().catch(() => ({}));
     if (!ACCESS_CODE_RE.test(String(code || ""))) return json({ error: "Código inválido." }, 400);
 
-    // Limite de ERROS por IP: 8 códigos errados em 15 min -> bloqueia 15 min.
-    // Só conta falhas, então o entrevistador legítimo nunca é afetado.
+    // Limite de ERROS por IP: 20 códigos errados em 15 min -> bloqueia 15 min.
+    // Só conta falhas. 20 comporta erros de digitação de uma equipe inteira
+    // atrás do mesmo IP e continua tornando inviável adivinhar um código
+    // (10^8 a 10^12 combinações).
     const failKey = `fieldLogin:fail:${ip}`;
 
     const { data: users } = await svc
       .from("field_users").select("*")
       .eq("access_code", code).eq("active", true).limit(1);
     if (!users || users.length === 0) {
-      const failRl = await rateLimit(svc, failKey, 8, 900, 900);
+      const failRl = await rateLimit(svc, failKey, 20, 900, 900);
       if (!failRl.allowed) return tooMany(failRl.retryAfter, "Muitas tentativas com código inválido. Aguarde alguns minutos.");
       await sleep(400); // atraso uniforme contra enumeração de códigos
       return json({ error: "Código inválido ou entrevistador inativo." }, 401);
@@ -42,7 +46,13 @@ Deno.serve(async (req) => {
 
     // Um código só vale em UM aparelho por vez (a partir de DEVICE_LOCK_START).
     // Se outro celular já está vinculado, recusa e avisa os gestores.
-    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""));
+    const dev = await checkDeviceBinding(svc, fieldUser, String(device_id || ""), String(device_label || ""), String(display_mode || ""));
+    if (dev.missing) {
+      return json({
+        error: "Não foi possível identificar este aparelho. Feche o app e abra de novo; se continuar, verifique se o navegador não está em modo privado.",
+        code: "device_missing",
+      }, 400);
+    }
     if (dev.blocked) {
       await notifyCompanyManagers(svc, fieldUser.company_id, {
         type: "device_blocked",
