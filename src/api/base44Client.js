@@ -203,7 +203,11 @@ const storage = {
   // privado. Aceita URLs http antigas por compatibilidade. Retorna null se falhar.
   async signedAudioUrl(pathOrUrl, expiresIn = 3600) {
     if (!pathOrUrl) return null;
-    if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
+    // Entrevistas antigas guardavam a URL pública do bucket, que deixou de
+    // funcionar quando ele virou privado: extrai o caminho e assina.
+    const legacy = /\/storage\/v1\/object\/(?:public|sign)\/audio\/([^?#]+)/.exec(pathOrUrl);
+    if (legacy) pathOrUrl = decodeURIComponent(legacy[1]);
+    else if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
     const { data, error } = await supabase.storage.from("audio").createSignedUrl(pathOrUrl, expiresIn);
     if (error) return null;
     return data?.signedUrl || null;

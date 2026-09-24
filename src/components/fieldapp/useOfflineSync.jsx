@@ -1,5 +1,5 @@
 // Fila offline do App de Campo: rascunhos, entrevistas concluídas aguardando
-// envio, pesquisas baixadas e o histórico de sincronização.
+// envio, cópia local das pesquisas e o histórico de sincronização.
 //
 // Princípios (ver idbStore.js):
 //  - Cada entrevista é gravada no aparelho ANTES de qualquer tentativa de envio,
@@ -15,6 +15,7 @@ import {
   idbGet, idbSet, idbBatch, idbGetAllByPrefix, idbMigrateLegacyList, requestPersistentStorage,
   DRAFT_PREFIX, AUDIO_PREFIX, SURVEY_PREFIX,
 } from "@/components/fieldapp/idbStore";
+import { planSurveyCache } from "@/components/fieldapp/surveyCache";
 
 // Chaves do formato antigo (uma lista inteira numa chave só), migradas na abertura.
 const LEGACY_DRAFTS_KEY = "fieldsurvey_drafts";
@@ -65,6 +66,7 @@ export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [drafts, setDrafts] = useState([]);
   const [offlineSurveys, setOfflineSurveys] = useState([]);
+  const offlineSurveysRef = useRef([]);
   const [syncLogs, setSyncLogs] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
@@ -123,7 +125,9 @@ export function useOfflineSync() {
           idbGetAllByPrefix(SURVEY_PREFIX),
         ]);
         commitDrafts((prev) => mergeById(diskDrafts, prev, (d) => d._draftId));
-        setOfflineSurveys((prev) => mergeById(diskSurveys, prev, (s) => s.id));
+        const surveys = mergeById(diskSurveys, offlineSurveysRef.current, (s) => s.id);
+        offlineSurveysRef.current = surveys;
+        setOfflineSurveys(surveys);
         setStorageError(null);
         setHydrated(true);
         return true;
@@ -368,22 +372,29 @@ export function useOfflineSync() {
     return () => clearInterval(interval);
   }, [isOnline, syncDrafts]);
 
-  // ── Pesquisas baixadas ──
-  const downloadSurvey = useCallback(async (survey) => {
-    const item = { ...survey, _downloadedAt: new Date().toISOString(), _size: JSON.stringify(survey).length };
-    setOfflineSurveys((prev) => mergeById(prev, [item], (s) => s.id));
-    try {
-      await idbSet(SURVEY_PREFIX + survey.id, item);
-      addLog("success", `Pesquisa "${survey.title}" baixada para uso offline.`);
-    } catch (e) {
-      addLog("error", `Não foi possível guardar "${survey.title}" no celular: ${e?.message || "erro de armazenamento"}`);
+  // ── Pesquisas guardadas no celular ──
+  // Espelha a lista recebida do servidor (ver surveyCache.js). `keepIds` são as
+  // pesquisas com rascunho no celular, que não podem sumir mesmo se saírem da
+  // lista. Devolve as pesquisas cujo questionário mudou.
+  const syncSurveyCache = useCallback(async (serverSurveys, keepIds = []) => {
+    const plan = planSurveyCache({ cached: offlineSurveysRef.current, server: serverSurveys, keepIds });
+    offlineSurveysRef.current = plan.next;
+    setOfflineSurveys(plan.next);
+    if (plan.puts.length || plan.dels.length) {
+      try {
+        await idbBatch([
+          ...plan.puts.map((s) => ({ put: SURVEY_PREFIX + s.id, value: s })),
+          ...plan.dels.map((id) => ({ del: SURVEY_PREFIX + id })),
+        ]);
+      } catch (e) {
+        addLog("error", `Não foi possível guardar as pesquisas no celular: ${e?.message || "erro de armazenamento"}. Sem internet, o app usará a cópia anterior.`);
+      }
     }
+    for (const u of plan.updated) {
+      addLog("info", `Questionário "${u.title}" atualizado para a versão ${u.to}.`);
+    }
+    return plan.updated;
   }, [addLog]);
-
-  const removeSurveyOffline = useCallback(async (surveyId) => {
-    setOfflineSurveys((prev) => prev.filter((s) => s.id !== surveyId));
-    try { await idbBatch([{ del: SURVEY_PREFIX + surveyId }]); } catch { /* reaparece na próxima abertura */ }
-  }, []);
 
   const clearLogs = useCallback(() => setSyncLogs([]), []);
 
@@ -393,7 +404,7 @@ export function useOfflineSync() {
   return {
     isOnline, drafts, syncing, lastSynced, syncLogs,
     saveDraft, removeDraft, syncDrafts, sendDraft, retryDraft, loadDraftAudio,
-    offlineSurveys, downloadSurvey, removeSurveyOffline,
+    offlineSurveys, syncSurveyCache,
     totalStorageBytes, clearLogs, addLog,
     hydrated, storageError, saveError, retryHydrate: hydrate,
   };

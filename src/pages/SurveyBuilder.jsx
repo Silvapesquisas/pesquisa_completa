@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight, Copy, ClipboardPaste, Shuffle } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ArrowLeft, Save, Link as LinkIcon, BookMarked, CornerDownRight, Copy, ClipboardPaste, Shuffle, Smartphone, AlertTriangle } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -16,6 +16,7 @@ import { uuidv4 } from "@/lib/uuid";
 import QuestionBank from "@/components/surveys/QuestionBank";
 import QuestionImporter from "@/components/surveys/QuestionImporter";
 import SamplePlanEditor from "@/components/surveys/SamplePlanEditor";
+import { diffQuestionnaire, questionLabel } from "@/components/surveys/questionnaireDiff";
 
 const QUESTION_TYPES = [
   { value: "aberta", label: "Resposta Aberta" },
@@ -398,6 +399,17 @@ export default function SurveyBuilder() {
 
   const save = async (stay = false) => {
     if (!survey.title.trim()) { alert("Informe o título da pesquisa."); return; }
+    // Pesquisa já em campo: mudanças que quebram a comparação com as
+    // entrevistas coletadas pedem confirmação explícita.
+    if (fieldImpact?.breaking) {
+      const lines = breakingLines(fieldImpact).map((l) => `• ${l}`).join("\n");
+      if (!confirm(
+        "Esta pesquisa já está em campo. As alterações abaixo afetam a comparação com as entrevistas já feitas:\n\n"
+        + `${lines}\n\n`
+        + "As entrevistas antigas continuam com as respostas da versão anterior. "
+        + "Para não perder a comparação, prefira ADICIONAR perguntas/opções em vez de remover ou renomear.\n\nSalvar mesmo assim?",
+      )) return;
+    }
     setSaving(true);
     try {
       const me = await base44.auth.me();
@@ -422,13 +434,19 @@ export default function SurveyBuilder() {
         end_date: survey.end_date || null,
       };
       let savedId = editId;
+      let row = null;
       if (editId) {
-        await base44.entities.Survey.update(editId, payload);
+        row = await base44.entities.Survey.update(editId, payload);
       } else {
-        const created = await base44.entities.Survey.create(payload);
-        savedId = created?.id || null;
+        row = await base44.entities.Survey.create(payload);
+        savedId = row?.id || null;
       }
-      savedRef.current = JSON.stringify(survey);
+      // A versão do questionário é definida pelo banco; traz a atual de volta.
+      const saved = row
+        ? { ...survey, questions_version: row.questions_version, questions_updated_at: row.questions_updated_at, updated_date: row.updated_date }
+        : survey;
+      setSurvey(saved);
+      savedRef.current = JSON.stringify(saved);
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       setSaving(false);
       if (stay) {
@@ -448,6 +466,15 @@ export default function SurveyBuilder() {
     }
   };
 
+  // Efeito da edição nos celulares: só interessa quando a pesquisa já foi para
+  // campo (ativa ou pausada no momento em que foi aberta/salva).
+  let savedSurvey = null;
+  try { savedSurvey = savedRef.current ? JSON.parse(savedRef.current) : null; } catch { /* ignore */ }
+  const inField = !!editId && ["ativa", "pausada"].includes(savedSurvey?.status);
+  const diff = inField ? diffQuestionnaire(savedSurvey?.questions || [], survey.questions || []) : null;
+  const fieldImpact = diff?.changed ? diff : null;
+  const currentVersion = Number(survey.questions_version) || 0;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
@@ -455,7 +482,12 @@ export default function SurveyBuilder() {
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">{editId ? "Editar Pesquisa" : "Nova Pesquisa"}</h1>
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            {editId ? "Editar Pesquisa" : "Nova Pesquisa"}
+            {editId && currentVersion > 0 && (
+              <Badge className="bg-blue-50 text-blue-700 border-0 text-[11px] font-medium">Questionário versão {currentVersion}</Badge>
+            )}
+          </h1>
           <p className="text-[11px] text-gray-400">Suas alterações ficam guardadas neste navegador até você clicar em Salvar.</p>
         </div>
       </div>
@@ -603,6 +635,30 @@ export default function SurveyBuilder() {
         )}
       </div>
 
+      {fieldImpact && (
+        <div className={`rounded-xl border p-4 text-sm space-y-2 ${fieldImpact.breaking ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-blue-50 border-blue-200 text-blue-900"}`}>
+          <p className="font-semibold flex items-center gap-2">
+            <Smartphone className="w-4 h-4" /> Ao salvar, o questionário passa para a versão {currentVersion + 1}
+          </p>
+          <p className="text-xs leading-relaxed">
+            Os celulares dos entrevistadores recebem a nova versão automaticamente assim que o app tiver internet
+            (ao abrir, ao voltar para o app ou a cada 5 minutos). Uma entrevista que já está aberta termina na versão
+            em que começou, e cada entrevista registra a versão usada.
+          </p>
+          {fieldImpact.breaking > 0 && (
+            <div className="text-xs">
+              <p className="font-semibold flex items-center gap-1.5 mt-1">
+                <AlertTriangle className="w-3.5 h-3.5" /> Atenção: afeta a comparação com as entrevistas já feitas
+              </p>
+              <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                {breakingLines(fieldImpact).map((l, i) => <li key={i}>{l}</li>)}
+              </ul>
+              <p className="mt-1.5">Prefira adicionar perguntas ou opções novas em vez de remover, renomear ou trocar o tipo.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap justify-end gap-3 pb-10">
         <Button variant="outline" onClick={() => { try { localStorage.removeItem(draftKey); } catch { /* ignore */ } navigate(createPageUrl("Surveys")); }}>Cancelar</Button>
         <Button variant="outline" onClick={() => save(true)} disabled={saving} className="border-blue-200 text-blue-600 hover:bg-blue-50">
@@ -614,6 +670,17 @@ export default function SurveyBuilder() {
       </div>
     </div>
   );
+}
+
+// Lista legível das alterações que quebram a comparação com entrevistas antigas.
+function breakingLines(d) {
+  const lines = [];
+  for (const q of d.removed) lines.push(`Pergunta removida: "${questionLabel(q)}"`);
+  for (const t of d.typeChanged) lines.push(`Tipo alterado: "${questionLabel(t.question)}"`);
+  for (const o of d.optionsRemoved) {
+    lines.push(`Opção removida ou renomeada em "${questionLabel(o.question)}": ${o.options.map((x) => `"${x}"`).join(", ")}`);
+  }
+  return lines;
 }
 
 function ClipboardList(props) {

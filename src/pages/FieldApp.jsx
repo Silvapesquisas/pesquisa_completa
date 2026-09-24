@@ -18,6 +18,7 @@ import QuotaPanel from "@/components/fieldapp/QuotaPanel";
 import InstallApp from "@/components/fieldapp/InstallApp";
 import { quotaProgress, quotasExceededBy } from "@/lib/sampling";
 import OnboardingTutorial from "@/components/fieldapp/OnboardingTutorial";
+import { availableSurveys, findSurveyForDraft, questionsVersion } from "@/components/fieldapp/surveyCache";
 import { displayOptions } from "@/lib/optionOrder";
 
 const FIELD_USER_KEY = "fieldapp_user";
@@ -257,6 +258,13 @@ export default function FieldApp() {
   const clientUuidRef = useRef(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [loadingSurveys, setLoadingSurveys] = useState(false);
+  // A lista do servidor chegou nesta sessão? Enquanto não, vale a cópia do celular.
+  const [serverSurveysLoaded, setServerSurveysLoaded] = useState(false);
+  const [surveysCheckedAt, setSurveysCheckedAt] = useState(null);
+  const [surveysCheckFailed, setSurveysCheckFailed] = useState(false);
+  // Questionários que mudaram desde a última cópia (aviso ao entrevistador).
+  const [surveyUpdates, setSurveyUpdates] = useState([]);
+  const loadingSurveysRef = useRef(false);
   const [myInterviewCounts, setMyInterviewCounts] = useState({}); // surveyId -> count
   // Cotas por estrato: { surveyId: { questionId: { resposta: quantidade } } }
   const [quotaCounts, setQuotaCounts] = useState(() => {
@@ -271,9 +279,14 @@ export default function FieldApp() {
   const {
     isOnline, drafts, syncing, lastSynced, syncLogs,
     saveDraft, removeDraft, syncDrafts, sendDraft, retryDraft, loadDraftAudio, clearLogs,
-    offlineSurveys, downloadSurvey, removeSurveyOffline, totalStorageBytes,
-    storageError, saveError, retryHydrate,
+    offlineSurveys, syncSurveyCache, totalStorageBytes,
+    hydrated, storageError, saveError, retryHydrate,
   } = useOfflineSync();
+  // Lidos dentro de loadSurveys, que pode rodar a partir de um evento antigo.
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const selectedSurveyRef = useRef(null);
+  selectedSurveyRef.current = selectedSurvey;
 
   // Resultado da última entrevista concluída, para a tela final dizer a verdade:
   // "enviada", "salva no celular, será enviada" ou "NÃO salva — não feche o app".
@@ -300,7 +313,8 @@ export default function FieldApp() {
   }, []);
 
   const loadSurveys = async (user) => {
-    if (!user || !isOnline) return;
+    if (!user || !isOnline || loadingSurveysRef.current) return;
+    loadingSurveysRef.current = true;
     setLoadingSurveys(true);
     try {
       // Tudo vem da função backend, já validado e restrito à empresa do
@@ -309,15 +323,34 @@ export default function FieldApp() {
       const res = await base44.functions.invoke("fieldLogin", { code: user.access_code });
       localStorage.setItem(FIELD_USER_KEY, JSON.stringify(res.fieldUser));
       setFieldUser(res.fieldUser);
-      setOnlineSurveys(res.surveys || []);
+      const serverList = res.surveys || [];
+      setOnlineSurveys(serverList);
+      setServerSurveysLoaded(true);
+      setSurveysCheckedAt(new Date());
+      setSurveysCheckFailed(false);
+      // A cópia do celular passa a espelhar o servidor. Pesquisas com rascunho
+      // no aparelho ficam guardadas mesmo que tenham saído da lista.
+      const keepIds = [...new Set([
+        ...draftsRef.current.map((d) => d.survey_id),
+        selectedSurveyRef.current?.id,
+      ].filter(Boolean))];
+      const updated = await syncSurveyCache(serverList, keepIds);
+      if (updated.length) {
+        setSurveyUpdates((prev) => [
+          ...prev.filter((p) => !updated.some((u) => u.id === p.id)),
+          ...updated,
+        ]);
+      }
       setMyInterviewCounts(res.counts || {});
       if (res.quotas) {
         setQuotaCounts(res.quotas);
         try { localStorage.setItem(QUOTAS_KEY, JSON.stringify(res.quotas)); } catch { /* cota de storage cheia */ }
       }
     } catch {
-      // silently fail
+      // Sem resposta: segue com a cópia do celular e avisa na lista.
+      setSurveysCheckFailed(true);
     }
+    loadingSurveysRef.current = false;
     setLoadingSurveys(false);
   };
 
@@ -325,14 +358,34 @@ export default function FieldApp() {
   // A dependência é o access_code (não o objeto fieldUser): loadSurveys grava
   // um objeto novo em fieldUser e usar o objeto como dependência causava um
   // loop infinito de requisições.
+  // Só depois de ler o celular (hydrated): a comparação com a cópia local precisa
+  // enxergar o que já está guardado.
   useEffect(() => {
-    if (fieldUser && isOnline) loadSurveys(fieldUser);
-  }, [fieldUser?.access_code, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (fieldUser && isOnline && hydrated) loadSurveys(fieldUser);
+  }, [fieldUser?.access_code, isOnline, hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const allSurveys = [
-    ...offlineSurveys,
-    ...onlineSurveys.filter(s => !offlineSurveys.find(o => o.id === s.id)),
-  ];
+  // Busca questionários atualizados ao voltar para o app e a cada 5 minutos.
+  // Não interfere na entrevista aberta: ela usa a versão com que começou.
+  const fieldUserRef = useRef(null);
+  fieldUserRef.current = fieldUser;
+  const loadSurveysRef = useRef(null);
+  loadSurveysRef.current = loadSurveys;
+  useEffect(() => {
+    if (!isOnline || !hydrated) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible" && fieldUserRef.current) loadSurveysRef.current(fieldUserRef.current);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    const interval = setInterval(refresh, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      clearInterval(interval);
+    };
+  }, [isOnline, hydrated]);
+
+  const allSurveys = availableSurveys({
+    serverLoaded: serverSurveysLoaded, server: onlineSurveys, cached: offlineSurveys,
+  });
 
   // Entrevistas concluídas offline (aguardando sincronização) também contam para o limite
   const effectiveCounts = { ...myInterviewCounts };
@@ -582,6 +635,7 @@ export default function FieldApp() {
       client_uuid: clientUuidRef.current,
       survey_id: selectedSurvey.id,
       survey_title: selectedSurvey.title,
+      survey_version: questionsVersion(selectedSurvey) || null,
       field_user_id: fieldUser?.id,
       interviewer_name: fieldUser?.name || "Entrevistador",
       company_id: fieldUser?.company_id,
@@ -675,8 +729,20 @@ export default function FieldApp() {
   };
 
   const loadDraft = async (draft) => {
-    const survey = allSurveys.find(s => s.id === draft.survey_id);
-    if (!survey) { alert("Pesquisa do rascunho não encontrada. Baixe-a para uso offline."); return; }
+    const survey = findSurveyForDraft({ surveyId: draft.survey_id, server: onlineSurveys, cached: offlineSurveys });
+    if (!survey) {
+      alert("O questionário desta entrevista não está no celular. Abra o app com internet para buscá-lo; a entrevista continua guardada.");
+      return;
+    }
+    // Questionário mudou depois que a entrevista começou: as respostas são
+    // mantidas pelo identificador de cada pergunta; o entrevistador confere.
+    const draftVersion = Number(draft.survey_version) || 0;
+    if (draftVersion && questionsVersion(survey) && draftVersion !== questionsVersion(survey)) {
+      if (!confirm(
+        `O questionário foi atualizado (versão ${draftVersion} → ${questionsVersion(survey)}) depois que esta entrevista começou.\n\n`
+        + "As respostas já dadas serão mantidas. Perguntas novas ou alteradas aparecerão para responder, e respostas de perguntas removidas serão descartadas.\n\nContinuar?",
+      )) return;
+    }
     // O áudio é lido do aparelho antes de abrir: se o autosave rodasse sem ele,
     // gravaria "sem áudio" por cima da gravação salva.
     let storedAudio = null;
@@ -1202,9 +1268,11 @@ export default function FieldApp() {
 
         <OfflineSurveys
           surveys={allSurveys}
-          offlineSurveys={offlineSurveys}
-          onDownload={downloadSurvey}
-          onRemove={removeSurveyOffline}
+          fromServer={serverSurveysLoaded}
+          checkedAt={surveysCheckedAt}
+          checkFailed={surveysCheckFailed}
+          updates={surveyUpdates}
+          onDismissUpdates={() => setSurveyUpdates([])}
           totalStorageBytes={totalStorageBytes}
           isOnline={isOnline}
           loadingSurveys={loadingSurveys}
