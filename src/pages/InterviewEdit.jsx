@@ -14,6 +14,9 @@ export default function InterviewEdit() {
   const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id");
+  // Aberta pela lista de Entrevistas: salvar/cancelar volta para a lista, que
+  // restaura os filtros e a posição (ver Interviews.jsx).
+  const backTo = params.get("from") === "list" ? createPageUrl("Interviews") : createPageUrl(`InterviewDetail?id=${id}`);
   const [interview, setInterview] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [notes, setNotes] = useState("");
@@ -78,7 +81,7 @@ export default function InterviewEdit() {
     }];
     await base44.entities.Interview.update(id, { answers, notes, edit_history: history });
     setSaving(false);
-    navigate(createPageUrl(`InterviewDetail?id=${id}`));
+    navigate(backTo);
   };
 
   if (!interview) return <div className="p-6 text-gray-400">Carregando...</div>;
@@ -86,7 +89,7 @@ export default function InterviewEdit() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(createPageUrl(`InterviewDetail?id=${id}`))}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(backTo)}>
           <ArrowLeft className="w-4 h-4 mr-1" /> Cancelar
         </Button>
         <h1 className="text-xl font-bold text-gray-900">Editar Entrevista</h1>
@@ -126,7 +129,7 @@ export default function InterviewEdit() {
       </Card>
 
       <div className="flex justify-end gap-3 pb-10">
-        <Button variant="outline" onClick={() => navigate(createPageUrl(`InterviewDetail?id=${id}`))}>Cancelar</Button>
+        <Button variant="outline" onClick={() => navigate(backTo)}>Cancelar</Button>
         <Button onClick={save} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
           <Save className="w-4 h-4 mr-2" /> {saving ? "Salvando..." : "Salvar Alterações"}
         </Button>
