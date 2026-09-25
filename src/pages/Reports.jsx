@@ -488,7 +488,7 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
           <Button className="bg-green-600 hover:bg-green-700" onClick={exportXLSX} disabled={effective.length === 0}>
             <FileSpreadsheet className="w-4 h-4 mr-2" /> Exportar Excel (dados brutos)
           </Button>
-          <KmlExportDialog interviews={effective} surveys={surveys} docName={surveyObj?.title || "Entrevistas"} />
+          <KmlExportDialog interviews={effective} allInterviews={interviews} surveys={surveys} docName={surveyObj?.title || "Entrevistas"} />
           {generating && genMsg && <span className="text-sm text-gray-500">{genMsg}</span>}
         </CardContent>
       </Card>
