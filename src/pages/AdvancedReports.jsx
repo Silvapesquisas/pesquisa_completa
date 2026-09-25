@@ -152,8 +152,8 @@ export default function AdvancedReports() {
           ? base44.entities.Survey.filter({ company_id: companyId })
           : base44.entities.Survey.list(),
         companyId
-          ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at", 1000)
-          : base44.entities.Interview.list("-completed_at", 1000),
+          ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at")
+          : base44.entities.Interview.list("-completed_at"),
       ]);
       setSurveys(sv);
       setInterviews(iv);

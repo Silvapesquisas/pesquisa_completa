@@ -5,7 +5,7 @@
 // Entrada:  { code, withInterviews?, device_id, device_label?, display_mode? }
 // Saída:    { fieldUser, surveys, counts, quotas, myInterviews? }
 import {
-  corsHeaders, json, serviceClient, sleep,
+  corsHeaders, json, serviceClient, sleep, selectAll,
   clientIp, rateLimit, rateLimitReset, tooMany,
   ACCESS_CODE_RE, checkDeviceBinding, notifyCompanyManagers,
 } from "../_shared/utils.ts";
@@ -76,11 +76,13 @@ Deno.serve(async (req) => {
       ? (activeSurveys || []).filter((s) => assigned.includes(s.id))
       : (activeSurveys || []);
 
-    // Entrevistas do próprio entrevistador (metas/limites)
-    const { data: myInterviews } = await svc
-      .from("interviews").select("*").eq("field_user_id", fieldUser.id);
+    // Entrevistas do próprio entrevistador (metas/limites). Todas as linhas,
+    // não só as 1000 primeiras que o Supabase devolve por consulta. As
+    // respostas completas só vêm quando o painel do entrevistador pede.
+    const myInterviews = await selectAll<Record<string, string>>(() => svc
+      .from("interviews").select(withInterviews ? "*" : "id, survey_id, status").eq("field_user_id", fieldUser.id));
     const counts: Record<string, number> = {};
-    for (const iv of myInterviews || []) {
+    for (const iv of myInterviews) {
       if (iv.status === "concluida") counts[iv.survey_id] = (counts[iv.survey_id] || 0) + 1;
     }
 
@@ -106,7 +108,7 @@ Deno.serve(async (req) => {
     // gerencial). A regra continua sendo aplicada no envio (fieldSubmitInterview).
     return json({
       fieldUser, surveys, counts, quotas,
-      ...(withInterviews ? { myInterviews: myInterviews || [] } : {}),
+      ...(withInterviews ? { myInterviews } : {}),
     });
   } catch (error) {
     return json({ error: (error as Error).message || "Erro interno." }, 500);

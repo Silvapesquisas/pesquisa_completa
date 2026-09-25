@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Loader2, BarChart2, Map, PieChart, Users, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Loader2, BarChart2, Map, PieChart, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
 import { exportRawXLSX } from "@/components/reports/rawExport";
 import { format, isAfter, isBefore, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -62,7 +61,7 @@ export default function Reports() {
       const companyId = me?.company_id;
       const [sv, iv, co] = await Promise.all([
         companyId ? base44.entities.Survey.filter({ company_id: companyId }) : base44.entities.Survey.list(),
-        companyId ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at", 500) : base44.entities.Interview.list("-completed_at", 500),
+        companyId ? base44.entities.Interview.filter({ company_id: companyId }, "-completed_at") : base44.entities.Interview.list("-completed_at"),
         companyId ? base44.entities.Company.filter({ id: companyId }) : Promise.resolve([]),
       ]);
       setSurveys(sv);
