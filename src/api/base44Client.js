@@ -45,21 +45,48 @@ function normalizeDates(table, data) {
   return out;
 }
 
+// Máximo de linhas que o Supabase devolve por consulta.
+const PAGE_SIZE = 1000;
+
 function entity(name) {
   const table = TABLES[name];
   return {
     // filter({campo: valor, ...}, sort?, limit?) — sort "-campo" = desc
+    //
+    // Sem `limit`, devolve TODOS os registros. O Supabase entrega no máximo
+    // 1000 linhas por consulta (e corta o resto em silêncio), então a busca é
+    // feita em páginas até acabar. O "id" como desempate deixa a ordem estável
+    // entre as páginas.
     async filter(query = {}, sort, limit) {
-      let q = supabase.from(table).select("*");
-      for (const [k, v] of Object.entries(query || {})) q = q.eq(k, v);
-      if (sort) {
-        const desc = sort.startsWith("-");
-        q = q.order(desc ? sort.slice(1) : sort, { ascending: !desc });
+      const build = (withCount) => {
+        let q = supabase.from(table).select("*", withCount ? { count: "exact" } : undefined);
+        for (const [k, v] of Object.entries(query || {})) q = q.eq(k, v);
+        if (sort) {
+          const desc = sort.startsWith("-");
+          q = q.order(desc ? sort.slice(1) : sort, { ascending: !desc });
+        }
+        return q.order("id", { ascending: true });
+      };
+      const rows = [];
+      const seen = new Set();
+      let total = null; // total no servidor, informado na primeira página
+      let from = 0;
+      for (;;) {
+        const want = limit ? Math.min(PAGE_SIZE, limit - from) : PAGE_SIZE;
+        if (want <= 0) break;
+        const { data, error, count } = await build(from === 0).range(from, from + want - 1);
+        if (error) throw wrapError(error);
+        if (from === 0 && typeof count === "number") total = count;
+        if (!data || data.length === 0) break;
+        // Um registro criado durante a leitura pode empurrar outro para a página
+        // seguinte; o `seen` evita que ele apareça duas vezes.
+        for (const r of data) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
+        // Avança pelo que de fato veio: se o servidor usar páginas menores que
+        // PAGE_SIZE, nada é pulado.
+        from += data.length;
+        if (total !== null ? from >= total : data.length < want) break;
       }
-      if (limit) q = q.limit(limit);
-      const { data, error } = await q;
-      if (error) throw wrapError(error);
-      return data || [];
+      return rows;
     },
     list(sort, limit) {
       return this.filter({}, sort, limit);

@@ -5,7 +5,7 @@
 // Entrada:  { code, interview, audio_base64? (data URL), device_id, device_label?, display_mode? }
 // Saída:    { id, audio_url?, audio_failed? }
 import {
-  corsHeaders, json, serviceClient, sleep, monthStartISO,
+  corsHeaders, json, serviceClient, sleep, countRows,
   clientIp, rateLimit, tooMany,
   ACCESS_CODE_RE, checkDeviceBinding, notifyCompanyManagers, alreadyNotifiedThisMonth,
 } from "../_shared/utils.ts";
@@ -96,9 +96,10 @@ Deno.serve(async (req) => {
       ? Number(personalLimit)
       : (survey.max_interviews_per_interviewer || null);
     if (limit) {
-      const { data: mine } = await svc.from("interviews").select("id")
-        .eq("field_user_id", fieldUser.id).eq("survey_id", survey.id).eq("status", "concluida");
-      if ((mine?.length || 0) >= limit) {
+      // Contado no banco: buscar as linhas pararia em 1000.
+      const mine = await countRows(svc.from("interviews").select("id", { count: "exact", head: true })
+        .eq("field_user_id", fieldUser.id).eq("survey_id", survey.id).eq("status", "concluida"));
+      if (mine >= limit) {
         return json({ error: `Limite de ${limit} entrevistas atingido para esta pesquisa. Fale com seu supervisor.` }, 409);
       }
     }
@@ -106,11 +107,15 @@ Deno.serve(async (req) => {
     // Cota mensal da empresa
     const { data: comp } = await svc.from("companies").select("max_interviews_per_month").eq("id", fieldUser.company_id).limit(1);
     const monthlyLimit = Number(comp?.[0]?.max_interviews_per_month) || 0;
+    // Uso do mês contado no banco (company_month_used): buscar as linhas e
+    // contar aqui parava em 1000 e deixava a cota de ser aplicada.
+    const monthUsed = async () => {
+      const { data, error } = await svc.rpc("company_month_used", { p_company_id: fieldUser.company_id });
+      if (error) throw error;
+      return Number(data) || 0;
+    };
     if (monthlyLimit > 0) {
-      const ms = monthStartISO();
-      const { data: ci } = await svc.from("interviews").select("completed_at, created_date, status")
-        .eq("company_id", fieldUser.company_id).eq("status", "concluida");
-      const used = (ci || []).filter((iv) => (iv.completed_at || iv.created_date || "") >= ms).length;
+      const used = await monthUsed();
       if (used >= monthlyLimit) {
         return json({ error: `Limite mensal de ${monthlyLimit} entrevistas da empresa foi atingido. Fale com o administrador.` }, 409);
       }
@@ -177,26 +182,26 @@ Deno.serve(async (req) => {
 
     // Aviso de cota: 80% e 95% do limite mensal da empresa, uma vez por mês
     // cada. Dá tempo do gestor renovar antes de o campo parar.
-    if (monthlyLimit > 0) {
-      const { data: ci2 } = await svc.from("interviews").select("completed_at, created_date")
-        .eq("company_id", fieldUser.company_id).eq("status", "concluida");
-      const ms2 = monthStartISO();
-      const used2 = (ci2 || []).filter((iv) => (iv.completed_at || iv.created_date || "") >= ms2).length;
-      const pct = (used2 / monthlyLimit) * 100;
-      const level = pct >= 95 ? 95 : pct >= 80 ? 80 : 0;
-      if (level > 0) {
-        const type = `quota_${level}`;
-        if (!(await alreadyNotifiedThisMonth(svc, fieldUser.company_id, type))) {
-          const restam = Math.max(monthlyLimit - used2, 0);
-          await notifyCompanyManagers(svc, fieldUser.company_id, {
-            type,
-            title: level >= 95 ? "Cota mensal quase esgotada" : "Cota mensal em 80%",
-            message: `Sua empresa já realizou ${used2} de ${monthlyLimit} entrevistas do mês (${Math.round(pct)}%). Restam ${restam}. Para ampliar o limite, fale com a plataforma pelo WhatsApp.`,
-            link_page: "Companies",
-          });
+    // A entrevista já está gravada: uma falha no aviso não pode virar erro no envio.
+    try {
+      if (monthlyLimit > 0) {
+        const used2 = await monthUsed();
+        const pct = (used2 / monthlyLimit) * 100;
+        const level = pct >= 95 ? 95 : pct >= 80 ? 80 : 0;
+        if (level > 0) {
+          const type = `quota_${level}`;
+          if (!(await alreadyNotifiedThisMonth(svc, fieldUser.company_id, type))) {
+            const restam = Math.max(monthlyLimit - used2, 0);
+            await notifyCompanyManagers(svc, fieldUser.company_id, {
+              type,
+              title: level >= 95 ? "Cota mensal quase esgotada" : "Cota mensal em 80%",
+              message: `Sua empresa já realizou ${used2} de ${monthlyLimit} entrevistas do mês (${Math.round(pct)}%). Restam ${restam}. Para ampliar o limite, fale com a plataforma pelo WhatsApp.`,
+              link_page: "Companies",
+            });
+          }
         }
       }
-    }
+    } catch { /* aviso de cota é secundário */ }
 
     return json({ id: created.id, audio_url: audioUrl, audio_failed: audioFailed });
   } catch (error) {

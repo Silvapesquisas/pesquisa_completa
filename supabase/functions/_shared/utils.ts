@@ -47,6 +47,32 @@ export function clientIp(req: Request) {
 
 type SvcClient = ReturnType<typeof serviceClient>;
 
+// Busca TODAS as linhas de uma consulta. O Supabase devolve no máximo 1000
+// linhas por vez e corta o resto em silêncio; aqui a leitura segue em páginas
+// (ordenadas por id, para não pular nem repetir) até vir uma página vazia.
+// `build` deve devolver uma consulta nova a cada chamada.
+// deno-lint-ignore no-explicit-any
+export async function selectAll<T = Record<string, unknown>>(build: () => any, pageSize = 1000): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await build().order("id", { ascending: true }).range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    rows.push(...(data as T[]));
+    from += data.length;
+  }
+  return rows;
+}
+
+// Quantidade de linhas de uma consulta, contada no banco (sem trazer as linhas).
+// deno-lint-ignore no-explicit-any
+export async function countRows(query: any): Promise<number> {
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // Conta uma tentativa em `key` e diz se ela é permitida. Em caso de falha do
 // banco, deixa passar (não derruba o serviço por causa do limitador).
 export async function rateLimit(

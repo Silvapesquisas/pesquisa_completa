@@ -81,10 +81,12 @@ export default function Layout({ children, currentPageName }) {
           ⚠️ Você é super-admin sem empresa vinculada. Acesse <strong>Empresas</strong> para criar e vincular empresas.
         </div>
       )}
+      {/* Azul da marca (#2563eb). As variáveis do tema são HSL — o Tailwind usa
+          hsl(var(--primary)); em RGB elas viravam um amarelo ilegível. */}
       <style>{`
         :root {
-          --primary: 37 99 235;
-          --primary-foreground: 255 255 255;
+          --primary: 221 83% 53%;
+          --primary-foreground: 0 0% 100%;
         }
       `}</style>
 

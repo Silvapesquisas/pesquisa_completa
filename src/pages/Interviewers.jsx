@@ -15,6 +15,14 @@ import {
 } from "lucide-react";
 import FieldAppAccess from "@/components/interviewers/FieldAppAccess";
 
+// "25/09/26 14:52" — data e hora da entrevista no histórico.
+const fmtDateTime = (d) => {
+  const x = d ? new Date(d) : null;
+  return x && !isNaN(x)
+    ? x.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "—";
+};
+
 // Limite de usuários externos por empresa: entre 4 e 25 (definido pelo super-admin)
 const MIN_FIELD_USERS = 4;
 const MAX_FIELD_USERS = 25;
@@ -58,8 +66,8 @@ export default function Interviewers() {
         ? base44.entities.Survey.filter({ company_id: companyId })
         : base44.entities.Survey.list(),
       companyId
-        ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date", 200)
-        : base44.entities.Interview.list("-created_date", 200),
+        ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date")
+        : base44.entities.Interview.list("-created_date"),
     ]);
     setFieldUsers(fu);
     setSurveys(sv);
@@ -524,11 +532,12 @@ export default function Interviewers() {
                   }
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-2">Últimas entrevistas</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {userIvs.slice(0, 10).map(i => (
-                      <div key={i.id} className="flex justify-between py-1.5 border-b last:border-0 text-xs">
-                        <span className="text-gray-700 truncate max-w-[60%]">{i.survey_title || "Pesquisa"}</span>
+                  <p className="text-xs font-medium text-gray-500 mb-2">Entrevistas ({userIvs.length}), da mais recente</p>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {userIvs.map(i => (
+                      <div key={i.id} className="flex justify-between items-center gap-2 py-1.5 border-b last:border-0 text-xs">
+                        <span className="text-gray-700 truncate min-w-0 flex-1">{i.survey_title || "Pesquisa"}</span>
+                        <span className="text-gray-400 shrink-0 tabular-nums">{fmtDateTime(i.completed_at || i.created_date)}</span>
                         <Badge variant={i.status === "concluida" ? "default" : "secondary"} className="text-xs capitalize">
                           {i.status?.replace("_", " ")}
                         </Badge>

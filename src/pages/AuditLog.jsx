@@ -20,8 +20,8 @@ export default function AuditLog() {
       const me = await base44.auth.me();
       const companyId = me?.company_id;
       const data = companyId
-        ? await base44.entities.Interview.filter({ company_id: companyId }, "-updated_date", 200)
-        : await base44.entities.Interview.list("-updated_date", 200);
+        ? await base44.entities.Interview.filter({ company_id: companyId }, "-updated_date")
+        : await base44.entities.Interview.list("-updated_date");
       // Only keep interviews that have edit history
       setInterviews(data.filter(i => i.edit_history?.length > 0));
       setLoading(false);
