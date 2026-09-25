@@ -4,15 +4,21 @@
 // pode ser:
 //   - a resposta de uma pergunta (ex.: bairro/localidade);
 //   - o nome do entrevistador;
-//   - a ordem da entrevista (Nº 1, Nº 2... por data de conclusão).
+//   - o número da entrevista na pesquisa (Nº 1 = primeira da pesquisa; cada
+//     pesquisa tem numeração própria, igual em qualquer filtro).
 // Com "agrupar", os pontos ficam em pastas por título (ligar/desligar cada
 // localidade no Google Earth) e cada grupo ganha uma cor de alfinete.
 import { format } from "date-fns";
+import {
+  normalizeText, questionChoices, suggestLocalityQuestion, answerFor, interviewWhen, surveySequence,
+} from "@/lib/surveyAnswers";
+
+export { normalizeText, questionChoices, suggestLocalityQuestion, answerFor };
 
 export const TITLE_MODES = {
   question: "Resposta de uma pergunta",
   interviewer: "Nome do entrevistador",
-  order: "Ordem das entrevistas (Nº 1, 2, 3...)",
+  order: "Número da entrevista na pesquisa (Nº 1, 2, 3...)",
 };
 
 const NO_ANSWER = "Sem resposta";
@@ -30,10 +36,6 @@ const xml = (s) => String(s ?? "")
 // Texto dentro de CDATA/HTML da descrição.
 const html = (s) => xml(s).replace(/\]\]>/g, "]]&gt;");
 
-export const normalizeText = (s) => String(s || "")
-  .normalize("NFD").replace(/[̀-ͯ]/g, "")
-  .toLowerCase().replace(/\s+/g, " ").trim();
-
 // Coordenada válida (0,0 é "sem GPS", não um ponto no oceano).
 const hasGeo = (i) => {
   if (i?.latitude == null || i?.longitude == null) return false;
@@ -41,44 +43,6 @@ const hasGeo = (i) => {
   return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 };
 
-/**
- * Perguntas disponíveis para título. Pesquisas diferentes podem ter a mesma
- * pergunta (ex.: "Em qual bairro você reside?"): elas viram UMA opção, casada
- * pelo texto, para funcionar também com "Todas as pesquisas".
- * @returns [{ key, text, ids: [questionId...] }]
- */
-export function questionChoices(surveys = []) {
-  const map = new Map();
-  for (const s of surveys) {
-    for (const q of [...(s.questions || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
-      const text = (q.text || "").trim();
-      if (!text) continue;
-      const key = normalizeText(text);
-      const item = map.get(key) || { key, text, ids: [] };
-      item.ids.push(q.id);
-      map.set(key, item);
-    }
-  }
-  return [...map.values()];
-}
-
-// Pergunta de localidade, sugerida como título padrão.
-const LOCALITY_RE = /\b(bairro|localidade|comunidade|povoado|distrito|regiao|zona|setor|vila|lugarejo)\b/;
-export function suggestLocalityQuestion(choices = []) {
-  return choices.find((c) => LOCALITY_RE.test(c.key)) || null;
-}
-
-export function answerFor(interview, choice) {
-  if (!choice) return "";
-  const ids = new Set(choice.ids || []);
-  const a = (interview.answers || []).find((x) => ids.has(x.question_id))
-    || (interview.answers || []).find((x) => normalizeText(x.question_text) === choice.key);
-  if (!a) return "";
-  const v = Array.isArray(a.answer_array) && a.answer_array.length ? a.answer_array.join(", ") : a.answer;
-  return String(v ?? "").trim();
-}
-
-const whenOf = (i) => i.completed_at || i.created_date || "";
 const fmtDate = (d) => {
   const x = d ? new Date(d) : null;
   return x && !isNaN(x) ? format(x, "dd/MM/yyyy HH:mm") : "—";
@@ -89,42 +53,59 @@ const fmtDate = (d) => {
  * @param interviews  entrevistas (as sem localização são ignoradas)
  * @param opts.mode   "question" | "interviewer" | "order"
  * @param opts.choice pergunta escolhida (de questionChoices), quando mode = "question"
- * @param opts.group  separar em pastas e cores por título (não se aplica a "order")
+ * @param opts.group  separar em pastas e cores por título
+ * @param opts.numbers Map(id -> Nº na pesquisa), calculado sobre TODAS as
+ *                    entrevistas de cada pesquisa (surveySequence). Sem ele, a
+ *                    numeração usa só as entrevistas recebidas.
  * @param opts.docName nome do documento no Google Earth
  * @returns { kml, points, groups: [{ title, count }] }
  */
-export function buildKML(interviews, { mode = "interviewer", choice = null, group = true, docName = "Entrevistas" } = {}) {
-  // A ordem é pela data de conclusão (Nº 1 = primeira entrevista), contada
-  // sobre as entrevistas exportadas.
+export function buildKML(interviews, {
+  mode = "interviewer", choice = null, group = true, numbers = null, docName = "Entrevistas",
+} = {}) {
+  const seq = numbers || surveySequence(interviews);
+  const multiSurvey = new Set(interviews.filter(hasGeo).map((i) => i.survey_id)).size > 1;
+
+  // Cada pesquisa tem numeração própria (Nº 1 = primeira entrevista DAQUELA
+  // pesquisa). Com mais de uma pesquisa no arquivo, na ordem numérica cada
+  // pesquisa vira uma pasta, para "Nº 12" não se repetir misturado.
   const points = interviews.filter(hasGeo)
-    .sort((a, b) => String(whenOf(a)).localeCompare(String(whenOf(b))))
-    .map((i, idx) => {
-      const n = idx + 1;
+    .map((i) => {
+      const n = seq.get(i.id) ?? null;
       let title;
-      if (mode === "order") title = `Nº ${n}`;
+      if (mode === "order") title = n ? `Nº ${n}` : "Nº ?";
       else if (mode === "question") title = answerFor(i, choice) || NO_ANSWER;
       else title = (i.interviewer_name || "").trim() || "Sem entrevistador";
-      return { i, n, title };
-    });
+      const survey = (i.survey_title || "").trim() || "Pesquisa";
+      const folder = mode === "order" ? (multiSurvey ? survey : null) : (group ? title : null);
+      return { i, n, title, folder };
+    })
+    .sort((a, b) => (a.i.survey_title || "").localeCompare(b.i.survey_title || "", "pt-BR")
+      || (a.n ?? 1e9) - (b.n ?? 1e9)
+      || String(interviewWhen(a.i)).localeCompare(String(interviewWhen(b.i))));
 
-  const useGroups = group && mode !== "order";
-  // Grupos do maior para o menor; "Sem resposta" por último.
+  // Grupos (pastas + cores) do maior para o menor; "Sem resposta" por último.
+  // Na ordem numérica, pastas por pesquisa em ordem alfabética.
   const counts = new Map();
-  for (const p of points) counts.set(p.title, (counts.get(p.title) || 0) + 1);
+  for (const p of points) if (p.folder != null) counts.set(p.folder, (counts.get(p.folder) || 0) + 1);
   const groups = [...counts.entries()]
     .map(([title, count]) => ({ title, count }))
-    .sort((a, b) => (a.title === NO_ANSWER) - (b.title === NO_ANSWER) || b.count - a.count || a.title.localeCompare(b.title, "pt-BR"));
+    .sort((a, b) => mode === "order"
+      ? a.title.localeCompare(b.title, "pt-BR")
+      : (a.title === NO_ANSWER) - (b.title === NO_ANSWER) || b.count - a.count || a.title.localeCompare(b.title, "pt-BR"));
+  const useGroups = groups.length > 0;
   const colorOf = new Map(groups.map((g, k) => [g.title, k < PALETTE.length ? PALETTE[k] : OTHER_COLOR]));
-  const styleId = (title) => `g${groups.findIndex((g) => g.title === title)}`;
+  const styleId = (folder) => `g${groups.findIndex((g) => g.title === folder)}`;
 
-  const styles = useGroups
-    ? groups.map((g) => `    <Style id="${styleId(g.title)}"><IconStyle><color>${colorOf.get(g.title)}</color><scale>1.1</scale><Icon><href>https://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png</href></Icon><hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`).join("\n")
-    : `    <Style id="p"><IconStyle><Icon><href>https://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon><hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`;
+  const styles = [
+    `    <Style id="p"><IconStyle><Icon><href>https://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon><hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`,
+    ...groups.map((g) => `    <Style id="${styleId(g.title)}"><IconStyle><color>${colorOf.get(g.title)}</color><scale>1.1</scale><Icon><href>https://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png</href></Icon><hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>`),
+  ].join("\n");
 
-  const placemark = ({ i, n, title }) => {
+  const placemark = ({ i, n, title, folder }) => {
     const rows = [
-      ["Nº", n],
-      ["Data", fmtDate(whenOf(i))],
+      ["Nº na pesquisa", n ?? "—"],
+      ["Data", fmtDate(interviewWhen(i))],
       ["Entrevistador", i.interviewer_name || "—"],
       ["Pesquisa", i.survey_title || "—"],
       ...(i.answers || []).map((a) => [
@@ -134,19 +115,16 @@ export function buildKML(interviews, { mode = "interviewer", choice = null, grou
       ...(i.notes ? [["Observações", i.notes]] : []),
     ];
     const table = `<table>${rows.map(([k, v]) => `<tr><td valign="top"><b>${html(k)}</b></td><td>${html(v)}</td></tr>`).join("")}</table>`;
-    const style = useGroups ? styleId(title) : "p";
+    const style = folder != null ? styleId(folder) : "p";
     return `      <Placemark><name>${xml(title)}</name><styleUrl>#${style}</styleUrl><description><![CDATA[${table}]]></description><Point><coordinates>${Number(i.longitude)},${Number(i.latitude)},0</coordinates></Point></Placemark>`;
   };
 
-  let body;
-  if (useGroups) {
-    body = groups.map((g) => {
-      const items = points.filter((p) => p.title === g.title).map(placemark).join("\n");
+  const body = useGroups
+    ? groups.map((g) => {
+      const items = points.filter((p) => p.folder === g.title).map(placemark).join("\n");
       return `    <Folder><name>${xml(`${g.title} (${g.count})`)}</name>\n${items}\n    </Folder>`;
-    }).join("\n");
-  } else {
-    body = points.map(placemark).join("\n");
-  }
+    }).join("\n")
+    : points.map(placemark).join("\n");
 
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">

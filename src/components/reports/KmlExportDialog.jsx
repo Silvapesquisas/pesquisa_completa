@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   TITLE_MODES, buildKML, downloadKML, questionChoices, suggestLocalityQuestion,
 } from "@/components/reports/kmlExport";
+import { surveySequence } from "@/lib/surveyAnswers";
 
 const PREFS_KEY = "kml_export_prefs";
 const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"); } catch { return {}; } };
@@ -22,9 +23,14 @@ const slug = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
 /**
  * @param interviews entrevistas a exportar (já filtradas pela tela)
  * @param surveys    pesquisas dessas entrevistas (fornecem a lista de perguntas)
+ * @param allInterviews TODAS as entrevistas carregadas (sem filtro): a
+ *                   numeração de cada pesquisa é feita sobre elas, então o Nº
+ *                   de uma entrevista não muda conforme o filtro
  * @param docName    nome do documento no Google Earth
  */
-export default function KmlExportDialog({ interviews = [], surveys = [], docName = "Entrevistas", buttonProps = {} }) {
+export default function KmlExportDialog({
+  interviews = [], allInterviews = null, surveys = [], docName = "Entrevistas", buttonProps = {},
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("question");
   const [questionKey, setQuestionKey] = useState("");
@@ -37,6 +43,7 @@ export default function KmlExportDialog({ interviews = [], surveys = [], docName
     return questionChoices(surveys.filter((s) => ids.has(s.id)));
   }, [interviews, surveys]);
   const choice = choices.find((c) => c.key === questionKey) || null;
+  const numbers = useMemo(() => surveySequence(allInterviews || interviews), [allInterviews, interviews]);
 
   // Ao abrir: repete a última escolha; sem ela, sugere a pergunta de
   // bairro/localidade; sem pergunta desse tipo, usa o entrevistador.
@@ -54,8 +61,8 @@ export default function KmlExportDialog({ interviews = [], surveys = [], docName
 
   const preview = useMemo(() => {
     if (!open || (mode === "question" && !choice)) return null;
-    return buildKML(interviews, { mode, choice, group, docName });
-  }, [open, interviews, mode, choice, group, docName]);
+    return buildKML(interviews, { mode, choice, group, numbers, docName });
+  }, [open, interviews, mode, choice, group, numbers, docName]);
 
   const exportNow = () => {
     if (!preview || preview.points === 0) return;
@@ -119,7 +126,9 @@ export default function KmlExportDialog({ interviews = [], surveys = [], docName
               </label>
             ) : (
               <p className="text-xs text-gray-400">
-                Numeradas pela data de conclusão: Nº 1 é a primeira entrevista desta exportação.
+                Cada pesquisa tem numeração própria, pela data de conclusão: Nº 1 é a primeira entrevista
+                daquela pesquisa. O número de uma entrevista é sempre o mesmo, com ou sem filtros, e aparece
+                também na lista de Entrevistas. Com mais de uma pesquisa, cada uma fica numa pasta.
               </p>
             )}
 
