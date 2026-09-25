@@ -7,10 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Loader2, BarChart2, Map, PieChart, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Loader2, BarChart2, PieChart, FileType, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react";
 import { exportRawXLSX } from "@/components/reports/rawExport";
+import KmlExportDialog from "@/components/reports/KmlExportDialog";
 import { format, isAfter, isBefore, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { BarChartCard, PieChartCard } from "@/components/reports/InterviewCharts";
 import { generatePDF } from "@/components/reports/pdfExport.jsx";
 import { generateDOCX } from "@/components/reports/docxExport";
@@ -223,20 +223,6 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
     }
     setGenMsg("");
     setGenerating(false);
-  };
-
-  const exportKML = () => {
-    const withGeo = effective.filter(i => i.latitude && i.longitude);
-    if (withGeo.length === 0) { alert("Nenhuma entrevista com geolocalização."); return; }
-    const placemarks = withGeo.map(i => {
-      const date = i.completed_at ? format(new Date(i.completed_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—";
-      return `    <Placemark><name>${i.interviewer_name || "Entrevistador"}</name><description><![CDATA[<b>Data:</b> ${date}<br/><b>Pesquisa:</b> ${i.survey_title || "—"}]]></description><Point><coordinates>${i.longitude},${i.latitude},0</coordinates></Point></Placemark>`;
-    }).join("\n");
-    const kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Entrevistas</name>${placemarks}</Document></kml>`;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([kml], { type: "application/vnd.google-earth.kml+xml" }));
-    a.download = `entrevistas-${format(new Date(), "yyyyMMdd")}.kml`;
-    a.click();
   };
 
   const SectionToggle = ({ k, label }) => (
@@ -502,9 +488,7 @@ Estruture com: 1. SÍNTESE DOS RESULTADOS; 2. ANÁLISE POR QUESTÃO; 3. PADRÕES
           <Button className="bg-green-600 hover:bg-green-700" onClick={exportXLSX} disabled={effective.length === 0}>
             <FileSpreadsheet className="w-4 h-4 mr-2" /> Exportar Excel (dados brutos)
           </Button>
-          <Button variant="outline" onClick={exportKML} disabled={effective.filter(i => i.latitude).length === 0}>
-            <Map className="w-4 h-4 mr-2" /> Exportar KML
-          </Button>
+          <KmlExportDialog interviews={effective} surveys={surveys} docName={surveyObj?.title || "Entrevistas"} />
           {generating && genMsg && <span className="text-sm text-gray-500">{genMsg}</span>}
         </CardContent>
       </Card>

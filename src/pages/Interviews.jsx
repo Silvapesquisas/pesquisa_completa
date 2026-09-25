@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MapPin, Mic, Eye, Edit, FileText, Map } from "lucide-react";
+import { Search, MapPin, Mic, Eye, Edit, FileText } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import KmlExportDialog from "@/components/reports/KmlExportDialog";
 
 export default function Interviews() {
   const [interviews, setInterviews] = useState([]);
@@ -51,40 +52,6 @@ export default function Interviews() {
     return matchSearch && matchSurvey && matchStatus;
   });
 
-  const exportKML = () => {
-    const withGeo = filtered.filter(i => i.latitude && i.longitude);
-    if (withGeo.length === 0) { alert("Nenhuma entrevista com geolocalização nos filtros atuais."); return; }
-
-    const placemarks = withGeo.map(i => {
-      const date = i.completed_at ? format(new Date(i.completed_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—";
-      const summary = i.notes || (i.answers || []).slice(0, 2).map(a => `${a.question_text}: ${a.answer || ""}`).join("; ");
-      return `    <Placemark>
-      <name>${i.interviewer_name || "Entrevistador"}</name>
-      <description><![CDATA[
-        <b>Data:</b> ${date}<br/>
-        <b>Entrevistador:</b> ${i.interviewer_name || "—"}<br/>
-        <b>Pesquisa:</b> ${i.survey_title || "—"}<br/>
-        <b>Resumo:</b> ${summary || "—"}
-      ]]></description>
-      <Point><coordinates>${i.longitude},${i.latitude},0</coordinates></Point>
-    </Placemark>`;
-    }).join("\n");
-
-    const kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>Entrevistas de Campo</name>
-${placemarks}
-  </Document>
-</kml>`;
-
-    const blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "entrevistas.kml";
-    a.click();
-  };
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -93,9 +60,11 @@ ${placemarks}
           <p className="text-gray-500 text-sm mt-1">{filtered.length} entrevista(s)</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportKML}>
-            <Map className="w-4 h-4 mr-2" /> Exportar KML
-          </Button>
+          <KmlExportDialog
+            interviews={filtered}
+            surveys={surveys}
+            docName={surveys.find(sv => sv.id === filterSurvey)?.title || "Entrevistas de Campo"}
+          />
           <Button variant="outline" onClick={() => navigate(createPageUrl("Reports"))}>
             <FileText className="w-4 h-4 mr-2" /> Relatório PDF
           </Button>
