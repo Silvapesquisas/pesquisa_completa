@@ -225,6 +225,20 @@ const stats = {
   },
 };
 
+const answers = {
+  // Troca, em todas as entrevistas da pesquisa, as grafias `from` (textos exatos
+  // como gravados) pela resposta padrão `to`. Registra no histórico de cada
+  // entrevista. Devolve quantas entrevistas mudaram (0 se o usuário não puder
+  // editar entrevistas — o RLS decide).
+  async standardize({ surveyId, questionIds, from, to }) {
+    const { data, error } = await supabase.rpc("standardize_answers", {
+      p_survey_id: surveyId, p_question_ids: questionIds, p_from: from, p_to: to,
+    });
+    if (error) throw wrapError(error);
+    return Number(data) || 0;
+  },
+};
+
 const storage = {
   // Gera uma URL assinada (temporária) para um caminho de áudio no bucket
   // privado. Aceita URLs http antigas por compatibilidade. Retorna null se falhar.
@@ -261,4 +275,5 @@ export const base44 = {
   users,
   storage,
   stats,
+  answers,
 };

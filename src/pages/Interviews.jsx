@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import KmlExportDialog from "@/components/reports/KmlExportDialog";
+import AnswerStandardizer from "@/components/interviews/AnswerStandardizer";
 import { normalizeText, questionChoices, answerValues, surveySequence } from "@/lib/surveyAnswers";
 
 const PAGE = 100;              // cartões exibidos por vez
@@ -43,40 +44,74 @@ function matchesCondition(i, cond, choice) {
 let condSeq = 0;
 const newCondition = () => ({ id: ++condSeq, key: "", value: "", text: "" });
 
+// Filtros ficam guardados na aba do navegador: ao abrir/editar uma entrevista e
+// voltar, a lista volta como estava (mesmos filtros, mesma posição).
+const FILTERS_KEY = "entrevistas_filtros_v1";
+const LAST_OPENED_KEY = "entrevistas_ultima_aberta";
+const loadSaved = () => {
+  try { return JSON.parse(sessionStorage.getItem(FILTERS_KEY) || "{}") || {}; } catch { return {}; }
+};
+
 export default function Interviews() {
   const [interviews, setInterviews] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterSurvey, setFilterSurvey] = useState("todos");
-  const [filterInterviewer, setFilterInterviewer] = useState("todos");
-  const [filterStatus, setFilterStatus] = useState("todos");
-  const [filterGeo, setFilterGeo] = useState("todas");
-  const [filterAudio, setFilterAudio] = useState("todos");
-  const [conditions, setConditions] = useState([]);
-  const [shown, setShown] = useState(PAGE);
+  const [saved] = useState(() => {
+    const s = loadSaved();
+    // Link vindo de outra tela com ?survey_id= manda na pesquisa escolhida.
+    const surveyIdParam = new URLSearchParams(window.location.search).get("survey_id");
+    if (surveyIdParam && surveyIdParam !== s.filterSurvey) {
+      return { filterSurvey: surveyIdParam };
+    }
+    const ids = (s.conditions || []).map((c) => Number(c.id) || 0);
+    condSeq = Math.max(condSeq, ...ids, 0);
+    return s;
+  });
+  const [search, setSearch] = useState(saved.search || "");
+  const [filterSurvey, setFilterSurvey] = useState(saved.filterSurvey || "todos");
+  const [filterInterviewer, setFilterInterviewer] = useState(saved.filterInterviewer || "todos");
+  const [filterStatus, setFilterStatus] = useState(saved.filterStatus || "todos");
+  const [filterGeo, setFilterGeo] = useState(saved.filterGeo || "todas");
+  const [filterAudio, setFilterAudio] = useState(saved.filterAudio || "todos");
+  const [conditions, setConditions] = useState(saved.conditions || []);
+  const [shown, setShown] = useState(saved.shown || PAGE);
+  const [highlightId, setHighlightId] = useState(null);
   const navigate = useNavigate();
 
+  const load = async () => {
+    const me = await base44.auth.me();
+    const companyId = me?.company_id;
+    const [iv, sv] = await Promise.all([
+      companyId
+        ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date")
+        : base44.entities.Interview.list("-created_date"),
+      companyId
+        ? base44.entities.Survey.filter({ company_id: companyId })
+        : base44.entities.Survey.list(),
+    ]);
+    setInterviews(iv);
+    setSurveys(sv);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const load = async () => {
-      const surveyIdParam = new URLSearchParams(window.location.search).get("survey_id");
-      if (surveyIdParam) setFilterSurvey(surveyIdParam);
-      const me = await base44.auth.me();
-      const companyId = me?.company_id;
-      const [iv, sv] = await Promise.all([
-        companyId
-          ? base44.entities.Interview.filter({ company_id: companyId }, "-created_date")
-          : base44.entities.Interview.list("-created_date"),
-        companyId
-          ? base44.entities.Survey.filter({ company_id: companyId })
-          : base44.entities.Survey.list(),
-      ]);
-      setInterviews(iv);
-      setSurveys(sv);
-      setLoading(false);
-    };
     load().catch(() => setLoading(false));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guarda os filtros a cada mudança.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({
+        search, filterSurvey, filterInterviewer, filterStatus, filterGeo, filterAudio, conditions, shown,
+      }));
+    } catch { /* armazenamento indisponível: segue sem lembrar */ }
+  }, [search, filterSurvey, filterInterviewer, filterStatus, filterGeo, filterAudio, conditions, shown]);
+
+  // Abre uma entrevista lembrando qual foi, para voltar até ela na lista.
+  const openInterview = (id, page) => {
+    try { sessionStorage.setItem(LAST_OPENED_KEY, id); } catch { /* ignore */ }
+    navigate(createPageUrl(page === "edit" ? `InterviewEdit?id=${id}&from=list` : `InterviewDetail?id=${id}`));
+  };
 
   // Nº de cada entrevista dentro da sua pesquisa (o mesmo do KML).
   const numbers = useMemo(() => surveySequence(interviews), [interviews]);
@@ -133,8 +168,28 @@ export default function Interviews() {
     });
   }, [interviews, search, filterSurvey, filterInterviewer, filterStatus, filterGeo, filterAudio, conditions, choiceByKey, searchIndex]);
 
-  // Novo filtro volta a mostrar do começo da lista.
-  useEffect(() => { setShown(PAGE); }, [search, filterSurvey, filterInterviewer, filterStatus, filterGeo, filterAudio, conditions]);
+  // Novo filtro volta a mostrar do começo da lista (menos na abertura da tela,
+  // que restaura a posição anterior).
+  const firstFilterRun = useRef(true);
+  useEffect(() => {
+    if (firstFilterRun.current) { firstFilterRun.current = false; return; }
+    setShown(PAGE);
+  }, [search, filterSurvey, filterInterviewer, filterStatus, filterGeo, filterAudio, conditions]);
+
+  // De volta de uma entrevista: rola até ela e destaca por alguns segundos.
+  useEffect(() => {
+    if (loading) return;
+    let id = null;
+    try { id = sessionStorage.getItem(LAST_OPENED_KEY); sessionStorage.removeItem(LAST_OPENED_KEY); } catch { /* ignore */ }
+    if (!id) return;
+    const idx = filtered.findIndex((i) => i.id === id);
+    if (idx < 0) return; // não passa mais no filtro (ex.: a resposta foi corrigida)
+    if (idx >= shown) setShown(Math.ceil((idx + 1) / PAGE) * PAGE);
+    setHighlightId(id);
+    setTimeout(() => document.querySelector(`[data-interview-id="${id}"]`)?.scrollIntoView({ block: "center" }), 50);
+    const t = setTimeout(() => setHighlightId(null), 2500);
+    return () => clearTimeout(t);
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeFilters = [search, filterSurvey !== "todos", filterInterviewer !== "todos", filterStatus !== "todos",
     filterGeo !== "todas", filterAudio !== "todos", conditions.some((c) => c.key && (c.value || c.text?.trim()))]
@@ -158,7 +213,13 @@ export default function Interviews() {
             <span className="text-gray-400"> · {withGeo} com GPS · {withAudio} com áudio</span>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <AnswerStandardizer
+            interviews={interviews}
+            surveys={surveys}
+            defaultSurveyId={filterSurvey !== "todos" ? filterSurvey : undefined}
+            onApplied={load}
+          />
           <KmlExportDialog
             interviews={filtered}
             allInterviews={interviews}
@@ -290,7 +351,8 @@ export default function Interviews() {
       ) : (
         <div className="space-y-3">
           {filtered.slice(0, shown).map(i => (
-            <Card key={i.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+            <Card key={i.id} data-interview-id={i.id}
+              className={`border-0 shadow-sm hover:shadow-md transition-shadow ${highlightId === i.id ? "ring-2 ring-blue-400" : ""}`}>
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex-1">
@@ -327,10 +389,10 @@ export default function Interviews() {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <Button size="sm" variant="outline" onClick={() => navigate(createPageUrl(`InterviewDetail?id=${i.id}`))}>
+                    <Button size="sm" variant="outline" onClick={() => openInterview(i.id, "view")}>
                       <Eye className="w-3 h-3 mr-1" /> Ver
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => navigate(createPageUrl(`InterviewEdit?id=${i.id}`))}>
+                    <Button size="sm" variant="outline" onClick={() => openInterview(i.id, "edit")}>
                       <Edit className="w-3 h-3 mr-1" /> Editar
                     </Button>
                   </div>
